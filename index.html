@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>IPGS Registrar Dashboard</title>
+
+  <script>
+    const API_URL = "PASTE_APPS_SCRIPT_URL?action=dashboard";
+
+    async function loadDashboard() {
+      const res = await fetch(API_URL);
+      const data = await res.json();
+
+      document.getElementById("totalStudents").innerText = data.summary.totalStudents;
+      document.getElementById("activeStudents").innerText = data.summary.activeStudents;
+      document.getElementById("totalFees").innerText = data.summary.totalFees;
+      document.getElementById("collected").innerText = data.summary.collected;
+      document.getElementById("outstanding").innerText = data.summary.outstanding;
+
+      const table = document.getElementById("studentTable");
+      table.innerHTML = "";
+
+      data.students.forEach(s => {
+        const row = `
+          <tr>
+            <td>${s.studentName}</td>
+            <td>${s.programShort}</td>
+            <td>${s.intake}</td>
+            <td>${s.paymentStatus}</td>
+          </tr>
+        `;
+        table.innerHTML += row;
+      });
+    }
+
+    setInterval(loadDashboard, 10000);
+    window.onload = loadDashboard;
+  </script>
+</head>
+
+<body>
+  <h1>IPGS Registrar Dashboard</h1>
+
+  <h2>Summary</h2>
+  <p>Total Students: <span id="totalStudents"></span></p>
+  <p>Active Students: <span id="activeStudents"></span></p>
+  <p>Total Fees: RM <span id="totalFees"></span></p>
+  <p>Collected: RM <span id="collected"></span></p>
+  <p>Outstanding: RM <span id="outstanding"></span></p>
+
+  <h2>Student List</h2>
+  <table border="1">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Program</th>
+        <th>Intake</th>
+        <th>Payment</th>
+      </tr>
+    </thead>
+    <tbody id="studentTable"></tbody>
+  </table>
+</body>
+</html>
