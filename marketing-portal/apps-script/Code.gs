@@ -12,6 +12,21 @@ const SOURCES={
 function reply_(obj){return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON)}
 function clean_(x){return String(x||'').toUpperCase().replace(/[^A-Z0-9]/g,'')}
 function cell_(r,i){return String(r[i]||'').trim()}
+function timestamp_(value){
+ const raw=String(value||'').trim();
+ if(!raw)return null;
+ if(/^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:?\d{2})$/.test(raw)){
+  const date=new Date(raw);return isNaN(date.getTime())?null:date.toISOString();
+ }
+ const m=raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?$/i);
+ if(!m)return null;
+ let hour=Number(m[4]||0);const minute=Number(m[5]||0),second=Number(m[6]||0);
+ if(m[7]){if(hour<1||hour>12)return null;hour=hour%12+(/^PM$/i.test(m[7])?12:0)}
+ const local=new Date(Date.UTC(Number(m[3]),Number(m[2])-1,Number(m[1]),hour,minute,second));
+ if(hour>23||minute>59||second>59||local.getUTCFullYear()!==Number(m[3])||local.getUTCMonth()!==Number(m[2])-1||local.getUTCDate()!==Number(m[1]))return null;
+ return new Date(local.getTime()-8*60*60*1000).toISOString();
+}
+function event_(lead){return {registeredAt:lead.registeredAt,sourceTab:lead.sourceTab,sourceRow:lead.row}}
 function canon_(s){
  s=String(s||'').trim(); const t=s.toUpperCase();
  if(/PHD|DOCTOR OF PHILOSOPHY/.test(t))return 'PhD in Management';
@@ -39,32 +54,40 @@ function read_(id,tab,first,max,headers,width){
  return rows.slice(1);
 }
 function build_(){
- const newest=read_(SOURCES.marketing,'IPGS Briefing Registration',2,5000,{2:'Full Name',3:'IC / Passport',5:'Email Address',7:'Programme',8:'Preferred Intake'},9);
- const historic=read_(SOURCES.marketing,'Data Briefing Session',2,5000,{1:'Full Name (As in IC)',2:'IC Number',4:'Email Address',5:'Programme',11:'Intake'},12);
+ const newest=read_(SOURCES.marketing,'IPGS Briefing Registration',2,5000,{0:'Timestamp',2:'Full Name',3:'IC / Passport',5:'Email Address',7:'Programme',8:'Preferred Intake'},9);
+ const historic=read_(SOURCES.marketing,'Data Briefing Session',2,5000,{0:'Timestamp',1:'Full Name (As in IC)',2:'IC Number',4:'Email Address',5:'Programme',11:'Intake'},12);
  const acc=read_(SOURCES.acc,'V2_APPLICATIONS',2,8000,{3:'Student Name',4:'ID / Passport No',7:'Programme',10:'Intake'},11);
- const tracker=read_(SOURCES.snapshot,'STUDENT_PAYMENT_TRACKER',5,10000,{0:'Student Status',2:'ID No',4:'Programme',5:'Intake'},6);
+ const tracker=read_(SOURCES.snapshot,'STUDENT_PAYMENT_TRACKER',5,10000,{0:'Student Status',2:'ID No',3:'Category',4:'Programme',5:'Intake'},6);
  const applied=new Map(),active=new Map();
  acc.forEach(r=>{let id=clean_(r[4]);if(id)applied.set(id,{name:cell_(r,3),programme:cell_(r,7),intake:cell_(r,10)})});
- tracker.forEach(r=>{const id=clean_(r[2]);if(id&&/^active$/i.test(cell_(r,0)))active.set(id,{programme:cell_(r,4),intake:cell_(r,5)})});
+ tracker.forEach(r=>{const id=clean_(r[2]);if(id&&/^active$/i.test(cell_(r,0)))active.set(id,{programme:cell_(r,4),intake:cell_(r,5),category:cell_(r,3)})});
  const leads=[];
- newest.forEach((r,i)=>{if(clean_(r[3]))leads.push({name:cell_(r,2),ic:cell_(r,3),email:cell_(r,5),programme:cell_(r,7),intake:cell_(r,8),origin:2,row:i+2})});
- historic.forEach((r,i)=>{if(clean_(r[2]))leads.push({name:cell_(r,1),ic:cell_(r,2),email:cell_(r,4),programme:cell_(r,5),intake:cell_(r,11),origin:1,row:i+2})});
- const chosen=new Map();
- leads.forEach(l=>{const id=clean_(l.ic),p=chosen.get(id);if(!p||l.origin>=p.origin)chosen.set(id,l)});
+ newest.forEach((r,i)=>{if(clean_(r[3]))leads.push({name:cell_(r,2),ic:cell_(r,3),email:cell_(r,5),programme:cell_(r,7),intake:cell_(r,8),origin:2,row:i+2,registeredAt:timestamp_(r[0]),sourceTab:'IPGS Briefing Registration'})});
+ historic.forEach((r,i)=>{if(clean_(r[2]))leads.push({name:cell_(r,1),ic:cell_(r,2),email:cell_(r,4),programme:cell_(r,5),intake:cell_(r,11),origin:1,row:i+2,registeredAt:timestamp_(r[0]),sourceTab:'Data Briefing Session'})});
+ const chosen=new Map(),registrations=new Map();
+ leads.forEach(l=>{const id=clean_(l.ic),p=chosen.get(id);if(!p||l.origin>p.origin||(l.origin===p.origin&&((l.registeredAt||'')>(p.registeredAt||'')||l.registeredAt===p.registeredAt&&l.row>p.row)))chosen.set(id,l);if(!registrations.has(id))registrations.set(id,[]);registrations.get(id).push(event_(l))});
  const candidates=[];
- chosen.forEach((l,id)=>{const a=applied.get(id),s=active.get(id);candidates.push({
+ chosen.forEach((l,id)=>{const a=applied.get(id),s=active.get(id),events=registrations.get(id).sort((a,b)=>(b.registeredAt||'').localeCompare(a.registeredAt||'')),dated=events.filter(e=>e.registeredAt);candidates.push({
  id:'C'+l.origin+'R'+l.row,name:l.name||a?.name||'',ic:l.ic,email:l.email,
  programme:canon_(l.programme||a?.programme||s?.programme),
  intake:intake_(l.intake||a?.intake||s?.intake),preferredIntakeOriginal:l.intake,
  stage:s?'activated':a?'applied':'interested',
- accFound:!!a,activated:!!s,source:'Marketing Registration'
+ accFound:!!a,activated:!!s,source:'Marketing Registration',
+ registeredAt:dated.length?dated[0].registeredAt:null,
+ firstRegisteredAt:dated.length?dated[dated.length-1].registeredAt:null,
+ registrationEvents:events,registrationCount:events.length,
+ sourceTab:l.sourceTab,snapshotCategory:s?s.category:null,
+ categoryReview:!!s&&s.category!=='Internal'
  })});
+ candidates.sort((a,b)=>(b.registeredAt||'').localeCompare(a.registeredAt||'')||a.name.localeCompare(b.name));
  const accCount=candidates.filter(x=>x.accFound).length,activeCount=candidates.filter(x=>x.activated).length;
  return {ok:true,refreshedAt:new Date().toISOString(),candidates,summary:{
  registrations:leads.length,unique:candidates.length,duplicateRegistrations:leads.length-candidates.length,
  notApplied:candidates.filter(x=>!x.accFound).length,
  applied:accCount,activated:activeCount,
- activatedWithoutAcc:candidates.filter(x=>x.activated&&!x.accFound).length
+ activatedWithoutAcc:candidates.filter(x=>x.activated&&!x.accFound).length,
+ missingRegistrationDates:candidates.filter(x=>!x.registeredAt).length,
+ categoryReview:candidates.filter(x=>x.categoryReview).length
  }};
 }
 function doPost(e){

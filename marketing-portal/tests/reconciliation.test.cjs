@@ -32,8 +32,8 @@ function fixture() {
       ['','','','Candidate A','A123','','','MBA','','','September 2026']
     ],
     'STUDENT_PAYMENT_TRACKER':[
-      [],[],[],['Student Status','Student Name','ID No','','Programme','Intake'],
-      ['Active','Candidate A','A123','','MBA','September 2026'],
+      [],[],[],['Student Status','Student Name','ID No','Category','Programme','Intake'],
+      ['Active','Candidate A','A123','Internal','MBA','September 2026'],
       ['Active','Candidate B','B123','','DBA','November 2026'],
       ['Inactive','Candidate C','C123','','MBM','May 2026']
     ]
@@ -79,4 +79,26 @@ test('uses only read-only Sheets OAuth scope and no SpreadsheetApp service', () 
   const manifest=JSON.parse(fs.readFileSync(require('node:path').join(__dirname,'../apps-script/appsscript.json'),'utf8'));
   assert.deepEqual(manifest.oauthScopes,['https://www.googleapis.com/auth/spreadsheets.readonly']);
   assert.equal(source.includes('SpreadsheetApp'),false);
+});
+test('parses Malaysian form timestamps independently of server timezone and rejects invalid dates',()=>{
+  const {context}=run(fixture());
+  assert.equal(context.timestamp_('27/10/2026 23:59:59'),'2026-10-27T15:59:59.000Z');
+  assert.equal(context.timestamp_('28/10/2026 00:01:00'),'2026-10-27T16:01:00.000Z');
+  assert.equal(context.timestamp_('27/10/2026 9:15:02 PM'),'2026-10-27T13:15:02.000Z');
+  for(const value of ['', '31/02/2026 10:00:00','27/10/2026 25:00:00','not a date'])assert.equal(context.timestamp_(value),null);
+});
+test('keeps every form event after identity merge and orders candidates by newest registration',()=>{
+  const tables=fixture();
+  tables['IPGS Briefing Registration'][1][0]='27/10/2026 21:00:00';
+  tables['IPGS Briefing Registration'][2][0]='27/10/2026 22:30:00';
+  tables['Data Briefing Session'][1][0]='15/09/2026 20:00:00';
+  const {result}=run(tables),a=result.candidates.find(c=>c.ic==='A-123');
+  assert.equal(a.registrationCount,2);
+  assert.equal(a.registrationEvents.length,2);
+  assert.equal(a.firstRegisteredAt,'2026-09-15T12:00:00.000Z');
+  assert.equal(a.registeredAt,'2026-10-27T13:00:00.000Z');
+  assert.equal(a.snapshotCategory,'Internal');
+  assert.equal(a.categoryReview,false);
+  assert.equal(result.candidates[0].name,'Candidate B');
+  assert.equal(result.summary.missingRegistrationDates,1);
 });

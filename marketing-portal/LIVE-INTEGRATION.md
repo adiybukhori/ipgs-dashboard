@@ -57,3 +57,14 @@ These are a point-in-time validation, not proof of a deployed bridge or an autom
 The deployed Google bridge and the production portal API both returned the same live summary: 196 unique candidates, 92 ACC matches, 104 without ACC matches, 74 active Snapshot matches, and 2 active candidates without an ACC match. An unauthenticated request to `/api/marketing` returned 401; the staff login succeeded and issued a Secure, HttpOnly session cookie. The authenticated production API returned HTTP 200 with `sourceStatus: live` and 196 candidate records. No source spreadsheet was edited.
 
 The first deployment's read method was corrected to use the Advanced Sheets service with the existing read-only grant. Production credentials are configured only in Apps Script properties and Vercel Production variables. The one-time bootstrap source has been replaced with a helper that contains no credential values.
+
+
+## Preview calendar and cohort filters — 28 October 2026
+
+The read-only bridge returns normalized UTC registration timestamps from the Malaysian form timestamps, the first/latest registration time, every source registration event, and the matched Snapshot category. Current form values still take precedence over legacy form values for candidate details. Repeated submissions remain attached to the deduplicated identity.
+
+The calendar counts unique IC/passport identities per Malaysia registration date and reports raw submission counts separately. These dates establish a registration cohort; they do not establish attendance at a preview or payment confirmation. Calendar ACC/Active counts show the cohort's current status. A candidate who registers on different dates remains visible on each date. Invalid or missing dates are shown explicitly and excluded from dated cohorts.
+
+Candidate Pipeline defaults to the latest registration first. Filters combine registration date range, programme, preferred intake, ACC match, activation, category and source form; quick filters identify follow-up queues and category discrepancies. CSV exports follow the current filters and escape spreadsheet formula prefixes. No category, ACC or Sky records are changed.
+
+Live-source validation found 212 unique candidates from 218 submissions, with 16 unique students and 16 submissions on 27 October 2026. All candidates had valid registration dates. Automated tests cover midnight boundaries, identity deduplication, historical date membership and independent ACC/activation filters.
