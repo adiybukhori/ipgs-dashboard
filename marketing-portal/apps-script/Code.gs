@@ -29,14 +29,14 @@ function intake_(value){
  return match&&months[match[1]]?months[match[1]]+' '+match[2]:raw||'Unspecified';
 }
 function read_(id,tab,first,max,headers,width){
- const sheet=SpreadsheetApp.openById(id).getSheetByName(tab);
- if(!sheet)throw Error('Missing tab: '+tab);
- const actual=sheet.getRange(first-1,1,1,width).getDisplayValues()[0];
+ let column='',n=width;
+ while(n>0){n--;column=String.fromCharCode(65+n%26)+column;n=Math.floor(n/26)}
+ const range="'"+tab.replace(/'/g,"''")+"'!A"+(first-1)+':'+column+(max+1);
+ const rows=Sheets.Spreadsheets.Values.get(id,range,{valueRenderOption:'FORMATTED_VALUE'}).values||[];
+ const actual=rows[0]||[];
  Object.keys(headers).forEach(i=>{if(clean_(actual[i])!==clean_(headers[i]))throw Error('Source columns changed: '+tab)});
- const last=sheet.getLastRow();
- if(last>max)throw Error('Source row limit exceeded: '+tab);
- if(last<first)return [];
- return sheet.getRange(first,1,last-first+1,width).getDisplayValues();
+ if(rows.length>max-first+2)throw Error('Source row limit exceeded: '+tab);
+ return rows.slice(1);
 }
 function build_(){
  const newest=read_(SOURCES.marketing,'IPGS Briefing Registration',2,5000,{2:'Full Name',3:'IC / Passport',5:'Email Address',7:'Programme',8:'Preferred Intake'},9);

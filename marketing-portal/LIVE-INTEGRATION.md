@@ -7,6 +7,7 @@ The portal now has an authenticated, read-only reconciliation backend and does *
 1. Open https://script.google.com/ while signed into a Google account that has read access to all 3 source spreadsheets. Create a new Apps Script project.
 2. Copy the contents of `apps-script/Code.gs` into the editor. Save.
    Enable the manifest in Project Settings and use `apps-script/appsscript.json` so Google requests only `spreadsheets.readonly`, rather than edit access. Read access is required for the three source files.
+   This manifest enables the Advanced Sheets v4 service. The bridge reads with `Sheets.Spreadsheets.Values.get`; it deliberately avoids `SpreadsheetApp.openById`, which requires the full spreadsheets permission. For the default Cloud project, Apps Script enables the Sheets API automatically. A standard Cloud project requires that API enabled separately.
 3. In **Project Settings → Script Properties**, add `BRIDGE_SHARED_SECRET` with a newly generated random secret (at least 32 random bytes). Keep it confidential.
 4. In **Deploy → New deployment → Web app**, set Execute as **Me** and access to **Anyone**. This is required because Vercel calls the script without a Google interactive login. The endpoint itself rejects all requests without the secret. Copy the resulting `https://script.google.com/macros/s/.../exec` URL.
 5. In the Vercel `ipgs-marketing-portal` project, configure **Production Environment Variables**:
@@ -50,3 +51,9 @@ The Apps Script web app must be deployed by an authorised Google account: ChatGP
 Connector reads confirmed the three configured source spreadsheet IDs and column layouts. The matching engine was run against those reads: 202 marketing records with an IC/passport, 196 unique candidates, 92 ACC matches, 104 without an ACC match and 74 active Snapshot matches. Two active candidates had no ACC match. Six duplicate registrations were consolidated. Two legacy rows contained a name/label only and no IC/passport, and were excluded from identity matching.
 
 These are a point-in-time validation, not proof of a deployed bridge or an automatic sync. Recheck after the Apps Script endpoint and Vercel variables are configured. Do not place raw candidate fixtures or credentials in the repository.
+
+## Production verification — 27 October 2026, 21:40 MYT
+
+The deployed Google bridge and the production portal API both returned the same live summary: 196 unique candidates, 92 ACC matches, 104 without ACC matches, 74 active Snapshot matches, and 2 active candidates without an ACC match. An unauthenticated request to `/api/marketing` returned 401; the staff login succeeded and issued a Secure, HttpOnly session cookie. The authenticated production API returned HTTP 200 with `sourceStatus: live` and 196 candidate records. No source spreadsheet was edited.
+
+The first deployment's read method was corrected to use the Advanced Sheets service with the existing read-only grant. Production credentials are configured only in Apps Script properties and Vercel Production variables. The one-time bootstrap source has been replaced with a helper that contains no credential values.

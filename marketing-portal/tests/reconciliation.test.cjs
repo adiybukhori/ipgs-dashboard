@@ -4,12 +4,12 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const source = fs.readFileSync(require('node:path').join(__dirname, '../apps-script/Code.gs'), 'utf8');
 function run(tables) {
-  const context = {SpreadsheetApp: {openById() {return {getSheetByName(name) {
-    const rows = tables[name];
-    if (!rows) return null;
-    return {getLastRow: () => rows.length, getRange: (row,col,count,width) => ({
-      getDisplayValues: () => Array.from({length:count},(_,i) => Array.from({length:width},(_,j) => String(rows[row-1+i]?.[col-1+j] ?? '')))
-    })};
+  const context = {Sheets: {Spreadsheets: {Values: {get(id,range) {
+    const match=range.match(/^'(.+)'!A(\d+):([A-Z]+)(\d+)$/);
+    const rows=tables[match[1].replace(/''/g,"'")];
+    if(!rows) throw Error('Missing sheet');
+    const width=[...match[3]].reduce((a,c)=>a*26+c.charCodeAt(0)-64,0);
+    return {values:rows.slice(Number(match[2])-1,Number(match[4])).map(row=>row.slice(0,width))};
   }}}}};
   vm.createContext(context);
   vm.runInContext(source, context);
@@ -71,7 +71,12 @@ test('rejects unauthenticated bridge requests before reading spreadsheets', () =
   let text;
   context.PropertiesService={getScriptProperties:()=>({getProperty:()=> 'test-secret'})};
   context.ContentService={MimeType:{JSON:'json'},createTextOutput:value=>({setMimeType(){text=value;return value;}})};
-  context.SpreadsheetApp={openById(){throw Error('Must not read sources');}};
+  context.Sheets={Spreadsheets:{Values:{get(){throw Error('Must not read sources');}}}};
   context.doPost({postData:{contents:JSON.stringify({key:'wrong',action:'reconcile'})}});
   assert.equal(JSON.parse(text).error,'Unauthorized');
+});
+test('uses only read-only Sheets OAuth scope and no SpreadsheetApp service', () => {
+  const manifest=JSON.parse(fs.readFileSync(require('node:path').join(__dirname,'../apps-script/appsscript.json'),'utf8'));
+  assert.deepEqual(manifest.oauthScopes,['https://www.googleapis.com/auth/spreadsheets.readonly']);
+  assert.equal(source.includes('SpreadsheetApp'),false);
 });
