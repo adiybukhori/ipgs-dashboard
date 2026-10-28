@@ -78,7 +78,30 @@ document.body.appendChild(lock);
 document.querySelectorAll('[onclick*="showAdd"]').forEach(el=>el.style.display='none');
 function liveMsg(v){document.getElementById('connectionMessage').textContent=v;document.getElementById('connectionState').textContent=v;}
 let syncing=false;
-async function syncLive(){if(syncing)return;syncing=true;try{const r=await fetch('/api/marketing',{credentials:'same-origin',cache:'no-store'});const v=await r.json();if(!r.ok)throw Error(v.error||'Data integration unavailable');if(!Array.isArray(v.candidates))throw Error('Invalid bridge response');data=v.candidates.map((x,i)=>({...x,id:String(x.id||'C'+i)}));initialiseCalendar();render();$('reconciliationNote').textContent=(v.summary?.activatedWithoutAcc||0)+' activated candidates have no matching ACC application. Applied totals count confirmed ACC records only.';liveMsg('LIVE DATA · Last refreshed '+new Date(v.refreshedAt||Date.now()).toLocaleString('en-MY',{timeZone:A.zone}));document.querySelectorAll('.state').forEach(el=>{el.textContent='● Connected (read only)';el.style.color='#13866d'});lock.style.display='none'}catch(e){data=[];render();liveMsg('LIVE DATA NOT AVAILABLE');document.getElementById('loginState').textContent=e.message||'Configuration required';lock.style.display='flex'}finally{syncing=false}}
+let syncStartedAt=0;
+function installSyncControl(){
+ const anchor=document.getElementById('connectionMessage');
+ if(!anchor||document.getElementById('manualSyncControl'))return;
+ const panel=document.createElement('div');
+ panel.id='manualSyncControl';
+ panel.style.cssText='margin:12px 0;display:flex;flex-wrap:wrap;align-items:center;gap:12px';
+ panel.innerHTML='<button type="button" id="manualSyncButton" class="btn primary" aria-label="Sync marketing data with ACC and Snapshot">↻ Sync ACC & Snapshot</button><div style="flex:1;min-width:170px"><div id="manualSyncStatus" role="status" aria-live="polite" style="font-size:12px;color:#475569">Ready to sync</div><div id="manualSyncTrack" role="progressbar" aria-label="Synchronization progress" aria-valuetext="Idle" style="display:none;height:7px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin-top:6px"><div id="manualSyncFill" style="width:35%;height:100%;background:#2563eb;border-radius:999px;animation:syncSlide 1.2s ease-in-out infinite alternate"></div></div></div>';
+ const style=document.createElement('style');style.textContent='@keyframes syncSlide{from{transform:translateX(-100%)}to{transform:translateX(285%)}}';document.head.appendChild(style);
+ anchor.parentElement.appendChild(panel);
+ document.getElementById('manualSyncButton').onclick=()=>syncLive(true);
+}
+function syncUI(stage,detail){
+ const b=document.getElementById('manualSyncButton'),track=document.getElementById('manualSyncTrack'),status=document.getElementById('manualSyncStatus');
+ if(!b||!track||!status)return;
+ b.disabled=stage==='working';
+ b.textContent=stage==='working'?'↻ Syncing…':'↻ Sync ACC & Snapshot';
+ track.style.display=stage==='working'?'block':'none';
+ track.setAttribute('aria-valuetext',stage==='working'?'Sync in progress (completion time unknown)':stage);
+ status.textContent=detail;
+ status.style.color=stage==='error'?'#b91c1c':stage==='done'?'#047857':'#475569';
+}
+installSyncControl();
+async function syncLive(manual=false){if(syncing)return;syncing=true;syncStartedAt=Date.now();syncUI('working','Reading Marketing, ACC and Snapshot live sources…');try{const r=await fetch('/api/marketing',{credentials:'same-origin',cache:'no-store'});const v=await r.json();if(!r.ok)throw Error(v.error||'Data integration unavailable');if(!Array.isArray(v.candidates))throw Error('Invalid bridge response');data=v.candidates.map((x,i)=>({...x,id:String(x.id||'C'+i)}));initialiseCalendar();render();$('reconciliationNote').textContent=(v.summary?.activatedWithoutAcc||0)+' activated candidates have no matching ACC application. Applied totals count confirmed ACC records only.';liveMsg('LIVE DATA · Last refreshed '+new Date(v.refreshedAt||Date.now()).toLocaleString('en-MY',{timeZone:A.zone}));document.querySelectorAll('.state').forEach(el=>{el.textContent='● Connected (read only)';el.style.color='#13866d'});lock.style.display='none';syncUI('done','Sync completed · '+data.length+' candidates checked · '+new Date().toLocaleString('en-MY',{timeZone:A.zone}));}catch(e){syncUI('error','Sync failed: '+(e.message||'Unknown error'));if(!data.length){data=[];render();liveMsg('LIVE DATA NOT AVAILABLE');document.getElementById('loginState').textContent=e.message||'Configuration required';lock.style.display='flex'}else{liveMsg('SYNC FAILED · Previous data retained')}}finally{syncing=false}}
 async function initLive(){try{const r=await fetch('/api/login',{cache:'no-store'});const a=await r.json();if(!a.configured){document.getElementById('loginState').textContent='Administrator setup required: configure bridge URL, secrets and portal password in Vercel.';document.querySelector('#liveLogin button').disabled=true;liveMsg('BACKEND CONFIGURATION REQUIRED');return}if(a.authenticated){await syncLive()}else document.getElementById('loginState').textContent='Enter the password provided by your marketing administrator.'}catch(e){document.getElementById('loginState').textContent='Cannot reach server-side authentication.'}}
 document.getElementById('liveLogin').addEventListener('submit',async e=>{e.preventDefault();const button=e.target.querySelector('button');button.disabled=true;try{const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:e.target.password.value})});const j=await r.json();if(!r.ok)throw Error(j.error||'Sign-in failed');e.target.reset();await syncLive()}catch(err){document.getElementById('loginState').textContent=err.message}finally{button.disabled=false}});
 async function signOut(){await fetch('/api/logout',{method:'POST',credentials:'same-origin'});data=[];tasks=[];calendarInitialised=false;render();lock.style.display='flex';$('loginState').textContent='Signed out.';liveMsg('SIGN-IN REQUIRED')}
