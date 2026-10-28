@@ -2,9 +2,20 @@
   "timeZone": "Asia/Kuala_Lumpur",
   "runtimeVersion": "V8",
   "exceptionLogging": "STACKDRIVER",
-  "oauthScopes": ["https://www.googleapis.com/auth/spreadsheets.readonly"],
+  "oauthScopes": [
+    "https://www.googleapis.com/auth/spreadsheets"
+  ],
   "dependencies": {
-    "enabledAdvancedServices": [{"userSymbol":"Sheets","version":"v4","serviceId":"sheets"}]
+    "enabledAdvancedServices": [
+      {
+        "userSymbol": "Sheets",
+        "version": "v4",
+        "serviceId": "sheets"
+      }
+    ]
   },
-  "webapp": {"access":"ANYONE_ANONYMOUS","executeAs":"USER_DEPLOYING"}
+  "webapp": {
+    "access": "ANYONE_ANONYMOUS",
+    "executeAs": "USER_DEPLOYING"
+  }
 }
