@@ -56,14 +56,14 @@ function read_(id,tab,first,max,headers,width){
 function build_(){
  const newest=read_(SOURCES.marketing,'IPGS Briefing Registration',2,5000,{0:'Timestamp',2:'Full Name',3:'IC / Passport',5:'Email Address',7:'Programme',8:'Preferred Intake'},9);
  const historic=read_(SOURCES.marketing,'Data Briefing Session',2,5000,{0:'Timestamp',1:'Full Name (As in IC)',2:'IC Number',4:'Email Address',5:'Programme',11:'Intake'},12);
- const acc=read_(SOURCES.acc,'V2_APPLICATIONS',2,8000,{3:'Student Name',4:'ID / Passport No',7:'Programme',10:'Intake'},11);
+ const acc=read_(SOURCES.acc,'V2_APPLICATIONS',2,8000,{3:'Student Name',4:'ID / Passport No',7:'Programme',10:'Intake',50:'SKY Activation Status',51:'SKY Student ID'},55);
  const tracker=read_(SOURCES.snapshot,'STUDENT_PAYMENT_TRACKER',5,10000,{0:'Student Status',2:'ID No',3:'Category',4:'Programme',5:'Intake'},6);
  const continuation=read_(SOURCES.marketing,'MARKETING_CONTINUATION_STATUS',2,500,{0:'IC / Passport',1:'Student Name',2:'Continuation Status'},7);
  const continuationMap=new Map();
  continuation.forEach(r=>{const id=clean_(r[0]);if(id)continuationMap.set(id,{status:cell_(r,2)||'Not Set',reason:cell_(r,3),effectiveDate:cell_(r,4),updatedBy:cell_(r,5),updatedAt:cell_(r,6)})});
  const applied=new Map(),active=new Map();
- acc.forEach(r=>{let id=clean_(r[4]);if(id)applied.set(id,{name:cell_(r,3),programme:cell_(r,7),intake:cell_(r,10)})});
- tracker.forEach(r=>{const id=clean_(r[2]);if(id&&/^active$/i.test(cell_(r,0)))active.set(id,{programme:cell_(r,4),intake:cell_(r,5),category:cell_(r,3)})});
+ acc.forEach(r=>{let id=clean_(r[4]);if(id)applied.set(id,{name:cell_(r,3),programme:cell_(r,7),intake:cell_(r,10),skyActivationStatus:cell_(r,50),matric:cell_(r,51)})});
+ tracker.forEach(r=>{const id=clean_(r[2]);if(id&&/^active$/i.test(cell_(r,0)))active.set(id,{name:cell_(r,1),programme:cell_(r,4),intake:cell_(r,5),category:cell_(r,3)})});
  const leads=[];
  newest.forEach((r,i)=>{if(clean_(r[3]))leads.push({name:cell_(r,2),ic:cell_(r,3),email:cell_(r,5),programme:cell_(r,7),intake:cell_(r,8),origin:2,row:i+2,registeredAt:timestamp_(r[0]),sourceTab:'IPGS Briefing Registration'})});
  historic.forEach((r,i)=>{if(clean_(r[2]))leads.push({name:cell_(r,1),ic:cell_(r,2),email:cell_(r,4),programme:cell_(r,5),intake:cell_(r,11),origin:1,row:i+2,registeredAt:timestamp_(r[0]),sourceTab:'Data Briefing Session'})});
@@ -79,13 +79,33 @@ function build_(){
  registeredAt:dated.length?dated[0].registeredAt:null,
  firstRegisteredAt:dated.length?dated[dated.length-1].registeredAt:null,
  registrationEvents:events,registrationCount:events.length,
- sourceTab:l.sourceTab,snapshotCategory:s?s.category:null,
+ sourceTab:l.sourceTab,snapshotCategory:s?s.category:null,accSkyStatus:a?.skyActivationStatus||'',accMatric:a?.matric||'',
  continuation:continuationMap.get(id)||{status:'Not Set',reason:'',effectiveDate:'',updatedBy:'',updatedAt:''},
  categoryReview:!!s&&s.category!=='Internal'
  })});
  candidates.sort((a,b)=>(b.registeredAt||'').localeCompare(a.registeredAt||'')||a.name.localeCompare(b.name));
  const accCount=candidates.filter(x=>x.accFound).length,activeCount=candidates.filter(x=>x.activated).length;
- return {ok:true,refreshedAt:new Date().toISOString(),candidates,summary:{
+ const internalActive=[...active.entries()].filter(([id,x])=>x.category==='Internal');
+ const internalPreview=internalActive.filter(([id])=>chosen.has(id));
+ const internalOutside=internalActive.filter(([id])=>!chosen.has(id)).map(([id,x])=>({
+   id:'OUT-'+id,name:x.name,ic:id,programme:canon_(x.programme),intake:intake_(x.intake),snapshotCategory:'Internal',
+   accFound:applied.has(id),accName:applied.get(id)?.name||'',accMatric:applied.get(id)?.matric||''
+ }));
+ const appliedC=candidates.filter(x=>x.accFound);
+ const statusOf=x=>{
+   if(x.activated)return 'Active in Sky';
+   const c=x.continuation.status;
+   if(c==='Not Qualified')return 'Not Qualified';
+   if(c==='Withdrawn')return 'Withdrawn';
+   if(c==='Withdrawal Requested')return 'Withdrawal Requested';
+   if(c==='Deferred')return 'Deferred';
+   return 'Pending Review / Activation';
+ };
+ const applicationBreakdown={};
+ appliedC.forEach(x=>{const k=statusOf(x);applicationBreakdown[k]=(applicationBreakdown[k]||0)+1});
+ const pendingDetails=appliedC.filter(x=>!x.activated).map(x=>({name:x.name,ic:x.ic,programme:x.programme,status:statusOf(x),accSkyStatus:x.accSkyStatus,matric:x.accMatric,reason:x.continuation.reason}));
+ return {ok:true,refreshedAt:new Date().toISOString(),candidates,internalOutside,pendingDetails,summary:{
+ internalTotalActive:internalActive.length,internalFromPreview:internalPreview.length,internalOutsidePreview:internalOutside.length,applicationBreakdown,
  registrations:leads.length,unique:candidates.length,duplicateRegistrations:leads.length-candidates.length,
  notApplied:candidates.filter(x=>!x.accFound).length,
  applied:accCount,activated:activeCount,
