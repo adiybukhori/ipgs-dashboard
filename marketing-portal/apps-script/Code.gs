@@ -58,6 +58,9 @@ function build_(){
  const historic=read_(SOURCES.marketing,'Data Briefing Session',2,5000,{0:'Timestamp',1:'Full Name (As in IC)',2:'IC Number',4:'Email Address',5:'Programme',11:'Intake'},12);
  const acc=read_(SOURCES.acc,'V2_APPLICATIONS',2,8000,{3:'Student Name',4:'ID / Passport No',7:'Programme',10:'Intake'},11);
  const tracker=read_(SOURCES.snapshot,'STUDENT_PAYMENT_TRACKER',5,10000,{0:'Student Status',2:'ID No',3:'Category',4:'Programme',5:'Intake'},6);
+ const continuation=read_(SOURCES.marketing,'MARKETING_CONTINUATION_STATUS',2,500,{0:'IC / Passport',1:'Student Name',2:'Continuation Status'},7);
+ const continuationMap=new Map();
+ continuation.forEach(r=>{const id=clean_(r[0]);if(id)continuationMap.set(id,{status:cell_(r,2)||'Not Set',reason:cell_(r,3),effectiveDate:cell_(r,4),updatedBy:cell_(r,5),updatedAt:cell_(r,6)})});
  const applied=new Map(),active=new Map();
  acc.forEach(r=>{let id=clean_(r[4]);if(id)applied.set(id,{name:cell_(r,3),programme:cell_(r,7),intake:cell_(r,10)})});
  tracker.forEach(r=>{const id=clean_(r[2]);if(id&&/^active$/i.test(cell_(r,0)))active.set(id,{programme:cell_(r,4),intake:cell_(r,5),category:cell_(r,3)})});
@@ -77,6 +80,7 @@ function build_(){
  firstRegisteredAt:dated.length?dated[dated.length-1].registeredAt:null,
  registrationEvents:events,registrationCount:events.length,
  sourceTab:l.sourceTab,snapshotCategory:s?s.category:null,
+ continuation:continuationMap.get(id)||{status:'Not Set',reason:'',effectiveDate:'',updatedBy:'',updatedAt:''},
  categoryReview:!!s&&s.category!=='Internal'
  })});
  candidates.sort((a,b)=>(b.registeredAt||'').localeCompare(a.registeredAt||'')||a.name.localeCompare(b.name));
@@ -87,6 +91,8 @@ function build_(){
  applied:accCount,activated:activeCount,
  activatedWithoutAcc:candidates.filter(x=>x.activated&&!x.accFound).length,
  missingRegistrationDates:candidates.filter(x=>!x.registeredAt).length,
+ withdrawalRequested:candidates.filter(x=>x.continuation.status==='Withdrawal Requested').length,
+ withdrawn:candidates.filter(x=>x.continuation.status==='Withdrawn').length,
  categoryReview:candidates.filter(x=>x.categoryReview).length
  }};
 }
