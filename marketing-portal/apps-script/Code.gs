@@ -101,8 +101,24 @@ function doPost(e){
  const input=JSON.parse(e&&e.postData&&e.postData.contents||'{}');
  const expected=PropertiesService.getScriptProperties().getProperty('BRIDGE_SHARED_SECRET');
  if(!expected||input.key!==expected)return reply_({ok:false,error:'Unauthorized'});
+ if(input.action==='updateContinuation')return reply_(updateContinuation_(input));
  if(input.action!=='reconcile')return reply_({ok:false,error:'Unsupported action'});
  return reply_(build_());
  }catch(ex){return reply_({ok:false,error:String(ex.message||ex).slice(0,180)})}
 }
 function doGet(){return reply_({ok:false,error:'Use authenticated POST'})}
+
+function updateContinuation_(input){
+ const allowed=['Not Set','Continuing','Pending Follow-up','Withdrawal Requested','Withdrawn','Deferred','Not Qualified'];
+ const id=clean_(input.ic),status=String(input.status||''),reason=String(input.reason||'').trim();
+ if(!id||id.length>40||!allowed.includes(status)||reason.length>2000)throw Error('Invalid continuation update');
+ if(['Withdrawal Requested','Withdrawn','Deferred','Not Qualified'].includes(status)&&!reason)throw Error('A remark is required');
+ const sheet=SpreadsheetApp.openById(SOURCES.marketing).getSheetByName('MARKETING_CONTINUATION_STATUS');
+ if(!sheet)throw Error('Continuation status sheet missing');
+ const last=sheet.getLastRow(),existing=last>1?sheet.getRange(2,1,last-1,2).getDisplayValues():[];
+ let row=existing.findIndex(r=>clean_(r[0])===id)+2;
+ if(row===1)row=last+1;
+ const name=String(input.name||'').slice(0,160),editor=String(input.updatedBy||'Marketing Portal Staff').slice(0,120);
+ sheet.getRange(row,1,1,7).setValues([[id,name,status,reason,String(input.effectiveDate||'').slice(0,10),editor,new Date().toISOString()]]);
+ return {ok:true,continuation:{status,reason,effectiveDate:String(input.effectiveDate||''),updatedBy:editor}};
+}
