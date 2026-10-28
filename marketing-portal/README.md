@@ -18,3 +18,8 @@ The portal remains locked until these are configured. A deployment alone does no
 ## Checks
 
 Run `node --test marketing-portal/tests/reconciliation.test.cjs` from the repository root.
+
+
+## Production bridge validation (29 October 2026)
+
+The production Apps Script bridge was updated to deployment version 4. Server-to-server read reconciliation checks passed (applied breakdown and Internal IPGS snapshot totals balance). The continuation write operation remains blocked pending the deploying Google account's OAuth approval for the Sheets write scope; do not mark Save Status as verified before this grant and a successful write test. Temporary diagnostic API routes have been removed.
