@@ -56,7 +56,7 @@ function read_(id,tab,first,max,headers,width){
 function build_(){
  const newest=read_(SOURCES.marketing,'IPGS Briefing Registration',2,5000,{0:'Timestamp',2:'Full Name',3:'IC / Passport',5:'Email Address',7:'Programme',8:'Preferred Intake'},9);
  const historic=read_(SOURCES.marketing,'Data Briefing Session',2,5000,{0:'Timestamp',1:'Full Name (As in IC)',2:'IC Number',4:'Email Address',5:'Programme',11:'Intake'},12);
- const acc=read_(SOURCES.acc,'V2_APPLICATIONS',2,8000,{3:'Student Name',4:'ID / Passport No',7:'Programme',10:'Intake',50:'SKY Activation Status',51:'SKY Student ID'},55);
+ const acc=read_(SOURCES.acc,'V2_APPLICATIONS',2,8000,{3:'Student Name',4:'ID / Passport No',5:'Personal Email',7:'Programme',10:'Intake',50:'SKY Activation Status',51:'SKY Student ID'},55);
  const tracker=read_(SOURCES.snapshot,'STUDENT_PAYMENT_TRACKER',5,10000,{0:'Student Status',2:'ID No',3:'Category',4:'Programme',5:'Intake'},6);
  const continuation=read_(SOURCES.marketing,'MARKETING_CONTINUATION_STATUS',2,500,{0:'IC / Passport',1:'Student Name',2:'Continuation Status'},7);
  const aliasRows=read_(SOURCES.marketing,'IPGS_VERIFIED_ID_MATCHES',2,500,{0:'Marketing ID',1:'Snapshot ID',2:'Student Name',3:'Status',4:'Verification Evidence',5:'Verified By',6:'Verified Date'},7);
@@ -64,8 +64,8 @@ function build_(){
  aliasRows.forEach(r=>{if(cell_(r,3)!=='VERIFIED')return;const marketingId=clean_(r[0]),skyId=clean_(r[1]);if(!marketingId||!skyId||marketingId===skyId||verifiedAliases.has(marketingId)||aliasSnapshotIds.has(skyId))throw Error('Invalid or duplicate verified identity match');verifiedAliases.set(marketingId,{skyId,name:cell_(r,2),evidence:cell_(r,4)});aliasSnapshotIds.add(skyId)});
  const continuationMap=new Map();
  continuation.forEach(r=>{const id=clean_(r[0]);if(id)continuationMap.set(id,{status:cell_(r,2)||'Not Set',reason:cell_(r,3),effectiveDate:cell_(r,4),updatedBy:cell_(r,5),updatedAt:cell_(r,6)})});
- const applied=new Map(),active=new Map();
- acc.forEach(r=>{let id=clean_(r[4]);if(id)applied.set(id,{name:cell_(r,3),programme:cell_(r,7),intake:cell_(r,10),skyActivationStatus:cell_(r,50),matric:cell_(r,51)})});
+ const applied=new Map(),active=new Map(),accEmails=new Set();
+ acc.forEach(r=>{let id=clean_(r[4]);if(id)applied.set(id,{name:cell_(r,3),programme:cell_(r,7),intake:cell_(r,10),skyActivationStatus:cell_(r,50),matric:cell_(r,51)});let email=cell_(r,5).trim().toLowerCase();if(email)accEmails.add(email)});
  tracker.forEach(r=>{const id=clean_(r[2]);if(id&&/^active$/i.test(cell_(r,0)))active.set(id,{name:cell_(r,1),programme:cell_(r,4),intake:cell_(r,5),category:cell_(r,3)})});
  const leads=[];
  newest.forEach((r,i)=>{if(clean_(r[3]))leads.push({name:cell_(r,2),ic:cell_(r,3),email:cell_(r,5),programme:cell_(r,7),intake:cell_(r,8),origin:2,row:i+2,registeredAt:timestamp_(r[0]),sourceTab:'IPGS Briefing Registration'})});
@@ -84,7 +84,7 @@ function build_(){
  programme:canon_(l.programme||a?.programme||s?.programme),
  intake:intake_(l.intake||a?.intake||s?.intake),preferredIntakeOriginal:l.intake,
  stage:s?'activated':a?'applied':'interested',
- accFound:!!a,activated:!!s,source:'Marketing Registration',
+ accFound:!!a,accEmailFound:!!l.email&&accEmails.has(l.email.trim().toLowerCase()),activated:!!s,source:'Marketing Registration',
  registeredAt:dated.length?dated[0].registeredAt:null,
  firstRegisteredAt:dated.length?dated[dated.length-1].registeredAt:null,
  registrationEvents:events,registrationCount:events.length,
