@@ -26,6 +26,7 @@ function remindWrite_(sh,row,item){
 function remindFind_(id,source){return source.candidates.find(c=>clean_(c.ic)===clean_(id))}
 function remindBlocked_(c){
  if(c.accFound)return 'Applied in ACC';
+ if(c.accEmailFound)return 'Possible ACC Match by Email — Verify ID';
  if(c.activated)return 'Active in Sky';
  if(['Not Qualified','Withdrawal Requested','Withdrawn','Deferred'].includes(c.continuation&&c.continuation.status))return 'Not Continuing';
  if(!c.email||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.email))return 'Email Missing / Invalid';
@@ -49,7 +50,7 @@ function reminderList_(input){
  const totals={marketingLeads:list.length,eligible:list.filter(x=>x.eligible).length,sentPreviously:list.filter(x=>x.count>0).length,
   totalSends:list.reduce((n,x)=>n+x.count,0),stopped:list.filter(x=>x.reminderStatus==='PAUSED').length,
   notInterested:list.filter(x=>x.reminderStatus==='NOT_INTERESTED').length,
-  accCompleted:source.candidates.filter(x=>x.accFound).length,
+  accCompleted:source.candidates.filter(x=>x.accFound).length,appliedAfterReminder:list.filter(x=>x.accFound&&x.count>0).length,
   active:source.candidates.filter(x=>x.activated).length,
   mode:PropertiesService.getScriptProperties().getProperty('IPGS_REMINDERS_ENABLED')==='true'?'ACTIVE':'PAUSED',
   schedule:'Every day around 09:00 Asia/Kuala_Lumpur',maxPerCandidate:REMINDER_MAX_DAYS,
