@@ -8,6 +8,9 @@ const crypto=require('node:crypto');
 const verifiedPairs=[{
  marketingHash:'09a21555a0ad4df89d301c49957f8f339cdda59013a6e6911f53d7677010a882',
  snapshotHash:'f29cdf71a7c816984cb205f99a49517949d6a21342199e171194db491aece0b1'
+},{
+ marketingHash:'27a8cb3ba3cad8efcfb544756b3a63fd6862d595ff1931f1d5ff5f694b278cf1',
+ snapshotHash:'9c54b77900241e8661b20afaaf58f9ce7ab53b29867629f83ef67a75d388c364'
 }];
 const normId=v=>String(v||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
 const normName=v=>String(v||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
@@ -37,7 +40,7 @@ function applyVerifiedMatches(parsed){
   person.identityMatchMethod='Verified ID cross-reference';
   person.identityMatchNote='Verified through IPGS identity register and matching name/email evidence';
   person.skyIntake=sky.intake||'';
-  person.accIntake='January 2027'; // existing ACC record, for Registry intake discrepancy review
+  person.accIntake=person.accIntake||''; // Only show intake when supplied by original ACC source
   person.intakeReview=!!person.skyIntake&&person.accIntake!==person.skyIntake;
   outside.splice(outside.indexOf(sky),1);
   pending.splice(pendingIndex,1);
@@ -49,6 +52,28 @@ function applyVerifiedMatches(parsed){
   summary.verifiedIdMatches=(summary.verifiedIdMatches||0)+1;
  }
  // No artificial totals: both summary identities remain invariant.
+ return parsed;
+}
+
+function classifyAccActivationDiscrepancies(parsed){
+ const candidates=parsed.candidates||[],details=parsed.pendingDetails||[],b=parsed.summary?.applicationBreakdown||{};
+ const category='ACC Activated / Snapshot Not Matched';
+ let n=0;
+ for(const x of candidates){
+  if(!x.accFound||x.activated||String(x.accSkyStatus||'').toUpperCase()!=='ACTIVATED'||!String(x.accMatric||'').trim())continue;
+  const status=x.continuation?.status;
+  if(['Withdrawal Requested','Withdrawn','Deferred','Not Qualified'].includes(status))continue;
+  x.processingCategory=category;
+  x.reconciliationRemark='ACC has Sky activation and matric; not found Active in the latest Snapshot. Verify Sky and snapshot sync before any re-activation.';
+  const d=details.find(z=>normId(z.ic)===normId(x.ic));
+  if(d){d.status=category;d.reason=d.reason||x.reconciliationRemark}
+  n++;
+ }
+ const old=Number(b['Pending Review / Activation']||0);
+ if(n>old)throw Error('ACC activation reconciliation exceeds pending applicant count');
+ b['Pending Review / Activation']=old-n;
+ b[category]=(Number(b[category]||0))+n;
+ parsed.summary.accActivatedNotInSnapshot=n;
  return parsed;
 }
 module.exports=async(req,res)=>{
@@ -66,6 +91,7 @@ module.exports=async(req,res)=>{
   try{parsed=JSON.parse(raw)}catch{return res.status(502).json({error:'Bridge did not return JSON'})}
   if(!r.ok||!parsed.ok)return res.status(502).json({error:parsed.error||'Bridge request failed'});
   applyVerifiedMatches(parsed);
+  classifyAccActivationDiscrepancies(parsed);
   res.status(200).json({candidates:parsed.candidates,summary:parsed.summary,internalOutside:parsed.internalOutside||[],pendingDetails:parsed.pendingDetails||[],refreshedAt:parsed.refreshedAt,sourceStatus:'live'});
  }catch(e){res.status(502).json({error:'Bridge unavailable: '+String(e.message).slice(0,100)})}
 };
