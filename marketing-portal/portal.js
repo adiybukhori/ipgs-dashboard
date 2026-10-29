@@ -5,10 +5,10 @@ let activeQuick="all",calendarInitialised=false,selectedDay=A.localDate(new Date
 function save(){localStorage.setItem(KEY,JSON.stringify({tasks}))}
 const $=id=>document.getElementById(id),esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])),pct=(a,b)=>b?Math.round(a/b*100):0;
 const ADMISSION_REVIEW_STATUSES=['Not Set','Pending Screening','Documents Incomplete','Pending Follow-up','Qualified - Pending Activation','Sky Activation Verification','Sky Inactive (Verified)','Sky Suspended (Verified)','Snapshot Sync Pending','Reactivation Pending','Continuing','Withdrawal Requested','Withdrawn','Deferred','Not Qualified'];
-const ACC_ACTIVATED_REVIEW='ACC Activated / Snapshot Not Matched',ACC_INACTIVE='ACC Activated / Confirmed Inactive';
+const ACC_ACTIVATED_REVIEW='ACC Activated / Snapshot Not Matched',ACC_INACTIVE='ACC Activated / Confirmed Inactive',ACC_SUSPENDED='ACC Activated / Suspended';
 let latestDiscrepancySave=null;
 const TERMINAL_ADMISSION_STATUSES=new Set(['Not Qualified','Withdrawal Requested','Withdrawn','Deferred']);
-const accActivatedSnapshotReviews=()=>data.filter(x=>x.accFound&&!x.activated&&[ACC_ACTIVATED_REVIEW,ACC_INACTIVE].includes(x.processingCategory));
+const accActivatedSnapshotReviews=()=>data.filter(x=>x.accFound&&!x.activated&&[ACC_ACTIVATED_REVIEW,ACC_INACTIVE,ACC_SUSPENDED].includes(x.processingCategory));
 const pendingAdmissionCandidates=()=>data.filter(x=>x.accFound&&!x.activated&&!x.processingCategory&&!TERMINAL_ADMISSION_STATUSES.has(x.continuation?.status));
 const stages={interested:"Not Applied",applied:"Applied in ACC",activated:"Activated"};
 function chip(s){return `<span class="tag ${s==="activated"?"green":s==="applied"?"blue":"amber"}">${stages[s]||esc(s)}</span>`}
@@ -20,7 +20,7 @@ function summaryBreakdown(){
  if(!v||!Number.isFinite(v.internalTotalActive)||!v.applicationBreakdown)return null;
  const b=v.applicationBreakdown;
  const n=k=>Math.max(0,Number(b[k]||0));
- return {v,active:n('Active in Sky'),accActivatedReview:n(ACC_ACTIVATED_REVIEW),accInactive:n(ACC_INACTIVE),pending:n('Pending Review / Activation'),notQualified:n('Not Qualified'),withdrawn:n('Withdrawn'),withdrawalRequested:n('Withdrawal Requested'),deferred:n('Deferred'),sum:Object.values(b).reduce((x,y)=>x+Number(y||0),0)};
+ return {v,active:n('Active in Sky'),accActivatedReview:n(ACC_ACTIVATED_REVIEW),accInactive:n(ACC_INACTIVE),accSuspended:n(ACC_SUSPENDED),pending:n('Pending Review / Activation'),notQualified:n('Not Qualified'),withdrawn:n('Withdrawn'),withdrawalRequested:n('Withdrawal Requested'),deferred:n('Deferred'),sum:Object.values(b).reduce((x,y)=>x+Number(y||0),0)};
 }
 function updateKpiCard(id,label,hint){
  const num=$(id),card=num?.closest('.card');
@@ -41,7 +41,7 @@ function summaries(){
  updateKpiCard('kInterested','Marketing Form Leads','Unique preview / marketing form registrations');
  updateKpiCard('kPending','Marketing Leads Not Matched to ACC','From the Marketing Form; check identity exceptions before follow-up');
  updateKpiCard('kApplied','Applied in ACC · From Marketing Form',m
-  ?'<div class="kpi-breakdown"><span class="kpi-mini ok"><b>'+m.active +'</b> Active (all categories)</span><span class="kpi-mini warn"><b>'+(m.accActivatedReview+m.accInactive)+'</b> ACC Activated / Snapshot Review</span><span class="kpi-mini warn"><b>'+m.pending+'</b> Pending</span><span class="kpi-mini"><b>'+m.notQualified+'</b> Not Qualified</span><span class="kpi-mini"><b>'+m.withdrawalRequested+'</b> Withdrawal Requested</span>'+(m.withdrawn?'<span class="kpi-mini">'+m.withdrawn+' Withdrawn</span>':'')+(m.deferred?'<span class="kpi-mini">'+m.deferred+' Deferred</span>':'')+'</div><div class="kpi-foot">'+(m.sum===nApplied?'✓ All '+nApplied+' applications accounted for':'⚠ Reconciliation mismatch')+' · includes other Snapshot categories</div>'
+  ?'<div class="kpi-breakdown"><span class="kpi-mini ok"><b>'+m.active +'</b> Active (all categories)</span><span class="kpi-mini warn"><b>'+(m.accActivatedReview+m.accInactive+m.accSuspended)+'</b> ACC Activated / Snapshot Review</span><span class="kpi-mini warn"><b>'+m.pending+'</b> Pending</span><span class="kpi-mini"><b>'+m.notQualified+'</b> Not Qualified</span><span class="kpi-mini"><b>'+m.withdrawalRequested+'</b> Withdrawal Requested</span>'+(m.withdrawn?'<span class="kpi-mini">'+m.withdrawn+' Withdrawn</span>':'')+(m.deferred?'<span class="kpi-mini">'+m.deferred+' Deferred</span>':'')+'</div><div class="kpi-foot">'+(m.sum===nApplied?'✓ All '+nApplied+' applications accounted for':'⚠ Reconciliation mismatch')+' · includes other Snapshot categories</div>'
   :'Awaiting live ACC application status reconciliation');
  updateKpiCard('kActivated','Internal IPGS Active · Sky Snapshot',m
   ?'<div class="kpi-breakdown"><span class="kpi-mini ok"><b>'+v.internalFromPreview+'</b> From Preview</span><span class="kpi-mini"><b>'+v.internalOutsidePreview+'</b> Outside Preview</span></div><div class="kpi-foot">'+(v.internalFromPreview+v.internalOutsidePreview===v.internalTotalActive?'✓ Matched to Snapshot category Internal':'⚠ Internal category count mismatch')+' · DPLI excluded</div>'
@@ -75,12 +75,12 @@ function candidateTableRows(list,filter={}){return list.map(x=>{const registered
 function renderCandidates(){
  const f=candidateFilters(),invalid=f.from&&f.to&&f.from>f.to;
  $("filterError").textContent=invalid?'Choose an end date on or after the start date.':'';
- const list=(invalid?[]:A.filterCandidates(data,f)).filter(x=>(!f.continuation||x.continuation?.status===f.continuation)&&((activeQuick!=='admission'||(x.accFound&&!x.activated&&!x.processingCategory&&!TERMINAL_ADMISSION_STATUSES.has(x.continuation?.status)))&&(activeQuick!=='accsky'||[ACC_ACTIVATED_REVIEW,ACC_INACTIVE].includes(x.processingCategory)))),stats=A.stats(list,f);
+ const list=(invalid?[]:A.filterCandidates(data,f)).filter(x=>(!f.continuation||x.continuation?.status===f.continuation)&&((activeQuick!=='admission'||(x.accFound&&!x.activated&&!x.processingCategory&&!TERMINAL_ADMISSION_STATUSES.has(x.continuation?.status)))&&(activeQuick!=='accsky'||[ACC_ACTIVATED_REVIEW,ACC_INACTIVE,ACC_SUSPENDED].includes(x.processingCategory)))),stats=A.stats(list,f);
  $("candidateCount").textContent=`${list.length} of ${data.length} candidates`;
  $("candidateRows").innerHTML=candidateTableRows(list,f);
  $("filteredKpis").innerHTML=`<span><b>${stats.applied}</b>in ACC</span><span><b>${stats.active}</b>active</span><span><b>${stats.awaitingAcc}</b>awaiting ACC</span>`;
  const base=A.filterCandidates(data,{...f,acc:'',activation:'',category:''}).filter(x=>!f.continuation||x.continuation?.status===f.continuation);
- const quick=[['all','All candidates',base.length],['acc','Awaiting ACC',base.filter(x=>!x.accFound).length],['activation','Awaiting activation',base.filter(x=>!x.activated).length],['admission','ACC Applied · Pending Review',base.filter(x=>x.accFound&&!x.activated&&!x.processingCategory&&!TERMINAL_ADMISSION_STATUSES.has(x.continuation?.status)).length],['accsky','ACC Activated · Snapshot Review',base.filter(x=>[ACC_ACTIVATED_REVIEW,ACC_INACTIVE].includes(x.processingCategory)).length],['active','Active',base.filter(x=>x.activated).length],['review','Review category',base.filter(x=>x.activated&&x.snapshotCategory!=='Internal').length],['discrepancy','Active, no ACC',base.filter(x=>x.activated&&!x.accFound).length],['withdrawal','Withdrawal requested',base.filter(x=>x.continuation?.status==='Withdrawal Requested').length]];
+ const quick=[['all','All candidates',base.length],['acc','Awaiting ACC',base.filter(x=>!x.accFound).length],['activation','Awaiting activation',base.filter(x=>!x.activated).length],['admission','ACC Applied · Pending Review',base.filter(x=>x.accFound&&!x.activated&&!x.processingCategory&&!TERMINAL_ADMISSION_STATUSES.has(x.continuation?.status)).length],['accsky','ACC Activated · Snapshot Review',base.filter(x=>[ACC_ACTIVATED_REVIEW,ACC_INACTIVE,ACC_SUSPENDED].includes(x.processingCategory)).length],['active','Active',base.filter(x=>x.activated).length],['review','Review category',base.filter(x=>x.activated&&x.snapshotCategory!=='Internal').length],['discrepancy','Active, no ACC',base.filter(x=>x.activated&&!x.accFound).length],['withdrawal','Withdrawal requested',base.filter(x=>x.continuation?.status==='Withdrawal Requested').length]];
  $("quickFilters").innerHTML=quick.map(([key,label,count])=>`<button class="quick-chip ${activeQuick===key?'active':''}" data-quick="${key}" aria-pressed="${activeQuick===key}">${label}<b>${count}</b></button>`).join('');
 }
 function clearQuickFilter(){activeQuick='';renderCandidates()}
@@ -127,17 +127,18 @@ function renderPendingWorklist(){
  const pending=pendingAdmissionCandidates();
  const accDiscrepancies=accActivatedSnapshotReviews();
  const confirmedInactive=accDiscrepancies.filter(x=>x.processingCategory===ACC_INACTIVE);
+ const confirmedSuspended=accDiscrepancies.filter(x=>x.processingCategory===ACC_SUSPENDED);
  const pendingWithoutRemark=pending.filter(x=>!String(x.continuation?.reason||'').trim());
  const alreadyFlagged=data.filter(x=>x.accFound&&!x.activated&&TERMINAL_ADMISSION_STATUSES.has(x.continuation?.status));
  const latest=window.ipgsSummary;
  root.innerHTML=(latestDiscrepancySave?'<div class="recon-save-result '+(latestDiscrepancySave.ok?'saved':'error')+'" role="status">'+esc(latestDiscrepancySave.message)+'</div>':'')+'<div class="panelhead"><div><h2>Admission Team — Pending Activation Worklist</h2><div class="small">Marketing Form applicants with ACC applications but not Active in Sky. Every case needs a documented reason or follow-up.</div></div><div class="buttons"><button class="btn soft" onclick="downloadPendingAdmissionsCSV()">↓ Export Pending List</button><button class="btn primary" onclick="navigatePendingAdmissions()">Review Pending in Candidate Pipeline</button></div></div>'
- +'<div class="pending-worklist-stats"><div><small>Pending Review / Activation</small><strong>'+pending.length+'</strong></div><div><small>ACC Activated / Snapshot Review</small><strong>'+accDiscrepancies.length+'</strong></div><div><small>Confirmed Sky Inactive</small><strong>'+confirmedInactive.length+'</strong></div><div><small>Awaiting Pending Remarks</small><strong>'+pendingWithoutRemark.length+'</strong></div><div><small>Other Non-Active Decisions</small><strong>'+alreadyFlagged.length+'</strong></div></div>'
+ +'<div class="pending-worklist-stats"><div><small>Pending Review / Activation</small><strong>'+pending.length+'</strong></div><div><small>ACC Activated / Snapshot Review</small><strong>'+accDiscrepancies.length+'</strong></div><div><small>Confirmed Sky Inactive</small><strong>'+confirmedInactive.length+'</strong></div><div><small>Suspended</small><strong>'+confirmedSuspended.length+'</strong></div><div><small>Awaiting Pending Remarks</small><strong>'+pendingWithoutRemark.length+'</strong></div><div><small>Other Non-Active Decisions</small><strong>'+alreadyFlagged.length+'</strong></div></div>'
  +'<p class="small">'+(latest?.applied!=null?'Part of '+latest.applied+' ACC applications from Marketing Form. ':'')+'ACC Activated students missing from the latest Snapshot are tracked separately; do not activate them a second time without verifying Sky. Staff remarks do not change official ACC or Sky.</p>'
  +'<div class="recon-tablewrap"><table class="pending-worklist-table"><thead><tr><th>Student</th><th>Programme / Intake</th><th>Processing Status</th><th>Remark / Required Follow-up</th><th>Action</th></tr></thead><tbody>'
  +pending.map(x=>'<tr data-candidate="'+esc(x.id)+'" tabindex="0"><td><strong>'+esc(x.name)+'</strong><div class="muted">'+esc(x.ic)+'</div></td><td>'+esc(x.programme)+'<div class="muted">'+esc(x.intake)+'</div></td><td><span class="tag amber">'+esc(x.continuation?.status&&x.continuation.status!=='Not Set'?x.continuation.status:'Unclassified — review')+'</span></td><td>'+esc(x.continuation?.reason||'No remark yet — review required')+'</td><td><button class="btn soft" type="button" data-candidate="'+esc(x.id)+'">Review &amp; Remark</button></td></tr>').join('')
  +'</tbody></table></div>'
  +(!pending.length?'<p class="small">No pending admission cases in the current Marketing → ACC cohort.</p>':'')
- +'<details open><summary>ACC Activated — Sky status verification ('+accDiscrepancies.length+')</summary><p class="small">ACC activation and matric exist, but the latest Snapshot has no Active match. Record a verified Sky status and reason below. This does not reactivate students or change ACC/Sky.</p>'
+ +'<details open><summary>ACC Activated — Inactive / Suspended / Reconciliation ('+accDiscrepancies.length+')</summary><p class="small">ACC activation and matric exist, but the latest Snapshot has no Active match. Record a verified Sky status and reason below. This does not reactivate students or change ACC/Sky.</p>'
  +'<div class="recon-tablewrap"><table class="pending-worklist-table"><thead><tr><th>Student / ACC Matric</th><th>Verified Sky Status</th><th>Staff Remark / Reason</th><th>Action</th></tr></thead><tbody>'
  +accDiscrepancies.map(x=>{
    const st=x.continuation?.status||'Not Set',reason=x.continuation?.reason||'';
@@ -205,10 +206,19 @@ function renderReconciliation(){
  if(!m){panel.innerHTML='<h3>IPGS Reconciliation</h3><p>Live Snapshot and ACC application breakdown are not available. IPGS Active is not inferred from Marketing Form Active.</p>';return}
  const outside=window.ipgsOutside||[],pending=window.ipgsPending||[];
  const balanced=m.sum===v.applied,internalMatched=v.internalFromPreview+v.internalOutsidePreview===v.internalTotalActive;
- const statusItems=[['Active in Sky (applied Marketing leads · all categories)',m.active],[ACC_ACTIVATED_REVIEW,m.accActivatedReview],[ACC_INACTIVE,m.accInactive],['Pending Review / Activation',m.pending],['Not Qualified',m.notQualified],['Withdrawal Requested',m.withdrawalRequested],['Withdrawn',m.withdrawn],['Deferred',m.deferred]];
+ const internalAppliedActive=data.filter(x=>x.accFound&&x.activated&&x.snapshotCategory==='Internal').length;
+ const internalPreviewNoACC=data.filter(x=>!x.accFound&&x.activated&&x.snapshotCategory==='Internal').length;
+ const otherAppliedActive=data.filter(x=>x.accFound&&x.activated&&x.snapshotCategory!=='Internal').length;
+ const regInactive=data.filter(x=>x.accFound&&!x.activated&&x.continuation?.status==='Sky Inactive (Verified)').length;
+ const regSuspended=data.filter(x=>x.accFound&&!x.activated&&x.continuation?.status==='Sky Suspended (Verified)').length;
+ const regWithdrawn=data.filter(x=>x.accFound&&!x.activated&&x.continuation?.status==='Withdrawn').length;
+ const statusItems=[['Active in Sky (applied Marketing leads · all categories)',m.active],[ACC_ACTIVATED_REVIEW,m.accActivatedReview],[ACC_INACTIVE,m.accInactive],[ACC_SUSPENDED,m.accSuspended],['Pending Review / Activation',m.pending],['Not Qualified',m.notQualified],['Withdrawal Requested',m.withdrawalRequested],['Withdrawn',m.withdrawn],['Deferred',m.deferred]];
  panel.innerHTML='<h3>IPGS Sales &amp; Marketing — Internal Active (Sky)</h3>'
  +'<div class="recon-totals"><div><small>From Preview · Internal</small><strong>'+v.internalFromPreview+'</strong></div><div><small>Outside Preview · Internal</small><strong>'+v.internalOutsidePreview+'</strong></div><div><small>Total Internal IPGS Active</small><strong>'+v.internalTotalActive+'</strong></div></div>'
  +'<div class="small">'+(internalMatched?'✓ Matches Sky Snapshot Internal category':'⚠ Snapshot mismatch')+' · DPLI and all external agents excluded.</div>'
+ +'<p class="small"><strong>Registry-reported non-active cases:</strong> '+regInactive+' temporarily Inactive (class not started), '+regSuspended+' Suspended, '+regWithdrawn+' Withdrawn. These are separate from '+v.internalTotalActive+' currently Active in Sky.'+(regInactive?' If all '+regInactive+' temporarily Inactive return to Active and all other counts remain unchanged, the hypothetical total would be '+(v.internalTotalActive+regInactive)+'; this is NOT the current Active count.':'')+'</p>'
+ +'<hr><h3>Why ACC Active differs from Internal IPGS Active</h3>'
+ +'<p class="small"><b>'+m.active+' Applied ACC + Sky Active</b> = '+internalAppliedActive+' Internal + '+otherAppliedActive+' other categories. <b>'+v.internalTotalActive+' Internal IPGS Sky Active</b> = '+internalAppliedActive+' Internal with ACC + '+internalPreviewNoACC+' Active from Marketing without matched ACC + '+v.internalOutsidePreview+' Outside Preview. These are different cohorts.</p>'
  +'<hr><h3>Marketing Form → ACC Applications (separate cohort)</h3>'
  +'<p class="recon-equation"><b>'+v.applied+' Applied</b> = '+statusItems.map(([label,count])=>'<span><b>'+count+'</b> '+esc(label)+'</span>').join(' + ')+' <b class="'+(balanced?'recon-ok':'recon-error')+'">'+(balanced?'✓ Balanced':'⚠ Mismatch')+'</b></p>'
  +'<p class="small"><b>Important:</b> '+v.applied+' refers to Marketing Form applicants across all categories. '+v.internalTotalActive+' refers only to Internal IPGS Active students, including those outside preview. Never compare them as one cohort. Pending is not automatically Not Qualified.</p>'
