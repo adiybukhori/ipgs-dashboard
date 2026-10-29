@@ -4,7 +4,7 @@ module.exports=async(req,res)=>{
  if(!ok(req))return res.status(401).json({ok:false,error:'Staff sign-in required'});
  const method=req.method,body=method==='POST'?(req.body||{}):{};
  if(method!=='GET'&&method!=='POST')return res.status(405).json({ok:false,error:'Unsupported method'});
- const action=method==='GET'?'reminderList':'reminderControl';
+ const action=method==='GET'?'reminderStatus':'reminderControl';
  if(method==='POST'&&(!/^(STOP|RESUME|NOT_INTERESTED)$/.test(String(body.command||''))||!/^[A-Za-z0-9 -]{4,48}$/.test(String(body.ic||''))))return res.status(400).json({ok:false,error:'Invalid reminder control'});
  const url=process.env.MARKETING_BRIDGE_URL,key=process.env.MARKETING_BRIDGE_SECRET;
  if(!url||!key)return res.status(503).json({ok:false,error:'Marketing bridge is not configured'});
