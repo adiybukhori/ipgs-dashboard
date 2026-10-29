@@ -16,27 +16,76 @@ function navigate(page){document.querySelectorAll('.section').forEach(s=>s.class
 document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>navigate(b.dataset.page));
 
 let reminderData=null,reminderLoading=false;
+function formatReminderState(snapshot){
+ const records=new Map((snapshot.records||[]).map(x=>[String(x.ic||'').toUpperCase().replace(/[^A-Z0-9]/g,''),x]));
+ const emailCount=new Map();
+ data.forEach(x=>{const em=String(x.email||'').trim().toLowerCase();if(em)emailCount.set(em,(emailCount.get(em)||0)+1)});
+ const today=A.localDate(new Date().toISOString()),candidates=data.map(x=>{
+  const id=String(x.ic||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  const log=records.get(id)||{},status=log.status||'ACTIVE';
+  const email=String(x.email||'').trim(),normalizedEmail=email.toLowerCase();
+  const registration=Date.parse(x.registeredAt||'');
+  const recent=Number.isFinite(registration)&&Date.now()-registration<86400000;
+  const lastDate=log.lastSentAt&&Number.isFinite(Date.parse(log.lastSentAt))?A.localDate(log.lastSentAt):'';
+  const alreadySent=lastDate===today;
+  let blocked=x.accFound?'Applied in ACC':x.accEmailFound?'Possible ACC Match by Email — Verify ID':x.activated?'Active in Sky':
+  ['Not Qualified','Withdrawal Requested','Withdrawn','Deferred'].includes(x.continuation?.status)?'Not Continuing':
+  !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)?'Email Missing / Invalid':
+  !Number.isFinite(registration)?'Registration Date Missing':
+  recent?'Within First 24 Hours':'';
+  const duplicate=(emailCount.get(normalizedEmail)||0)>1;
+  const eligible=!blocked&&!duplicate&&status==='ACTIVE'&&!alreadySent;
+  const reason=blocked||(duplicate?'Duplicate Email — Review':status==='NOT_INTERESTED'?'Not Interested':
+    status==='PAUSED'?'Stopped by Admin':alreadySent?'Already Sent Today':'');
+  return {ic:x.ic,name:x.name,email:x.email,programme:x.programme,registeredAt:x.registeredAt,
+   accFound:x.accFound,active:x.activated,reminderStatus:status,count:Math.max(0,Number(log.count||0)),
+   lastSentAt:log.lastSentAt||'',nextDueAt:log.nextDueAt||'',eligible,reason,stateUpdatedAt:log.updatedAt||''};
+ });
+ return {ok:true,candidates,summary:{...(snapshot.summary||{}),
+   eligible:candidates.filter(x=>x.eligible).length,marketingLeads:candidates.length,
+   accCompleted:data.filter(x=>x.accFound).length,
+   appliedAfterReminder:candidates.filter(x=>x.accFound&&x.count>0).length,
+   totalSends:candidates.reduce((n,x)=>n+x.count,0),
+   stopped:candidates.filter(x=>x.reminderStatus==='PAUSED').length,
+   notInterested:candidates.filter(x=>x.reminderStatus==='NOT_INTERESTED').length}};
+}
 async function loadReminderCenter(force){
  if(reminderLoading||(!force&&reminderData))return;
+ const state=$('reminderInfo'),mode=$('reminderMode');
+ if(!data.length){
+  if(mode)mode.textContent='Reminder list not available — Marketing data has not loaded';
+  if(state)state.textContent='Refresh Marketing data first, then try Refresh Reminder List.';
+  return;
+ }
  reminderLoading=true;
- const state=$('reminderInfo');
- if(state)state.textContent='Reading the admission reminder register…';
+ if(mode)mode.textContent='Loading reminder status…';
+ if(state)state.textContent='Reading reminder history. Marketing, ACC and Snapshot are not being synced again.';
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),14000);
  try{
-  const response=await fetch('/api/reminders',{cache:'no-store',credentials:'same-origin'});
+  const response=await fetch('/api/reminders',{cache:'no-store',credentials:'same-origin',signal:controller.signal});
   const result=await response.json();
-  if(!response.ok||!result.ok)throw Error(result.error||'Cannot read reminder register');
-  reminderData=result;
-  const t=result.summary||{};
+  if(!response.ok||!result.ok||!Array.isArray(result.records))throw Error(result.error||'Invalid reminder history response');
+  reminderData=formatReminderState(result);
+  const t=reminderData.summary||{};
   $('remEligible').textContent=t.eligible??0;
   $('remSent').textContent=t.totalSends??0;
   $('remPaused').textContent=t.stopped??0;
   $('remNotInterested').textContent=t.notInterested??0;
-  $('reminderMode').textContent=t.mode==='ACTIVE'?'Scheduled sending: ACTIVE · daily around 9:00 AM MYT':'Scheduled sending: PAUSED · no bulk emails will be sent';
-  $('reminderInfo').textContent='Daily 9:00 AM reminders continue until candidate opts out, admin stops, or ACC is submitted. The prominent Not Interested button appears from reminder '+(t.optOutCTAFrom||7)+' onward. Sender: ipgs.admission@innovative.edu.my · '+t.eligible+' currently eligible · '+t.accCompleted+' already applied (excluded).';
+  if(mode)mode.textContent=t.mode==='ACTIVE'?'Scheduled sending: ACTIVE · daily around 9:00 AM MYT':
+    'Scheduled sending: PAUSED · no bulk emails will be sent';
+  if(state)state.textContent='Read-only reminder history loaded. '+t.eligible+' currently eligible · '+t.accCompleted+
+   ' already applied in ACC · Sender: ipgs.admission@innovative.edu.my · Reminders continue daily until ACC submission, opt-out or staff Stop.';
   renderReminderRows();
  }catch(err){
-  if(state)state.textContent='Reminder register unavailable: '+String(err.message||err)+'. No emails were sent.';
- }finally{reminderLoading=false}
+  const hint=err.name==='AbortError'?'Request timed out. Please try Refresh Reminder List.':
+    String(err.message||err);
+  if(mode)mode.textContent='Reminder history unavailable — retry manually';
+  if(state)state.textContent='Unable to load reminder history: '+hint+' No reminder emails were sent.';
+  if(!reminderData){
+   for(const id of ['remEligible','remSent','remPaused','remNotInterested'])$(id).textContent='—';
+   $('reminderRows').innerHTML='<tr><td colspan="6" class="empty">Could not load reminder data. Click Refresh Reminder List to try again.</td></tr>';
+  }
+ }finally{clearTimeout(timer);reminderLoading=false}
 }
 function renderReminderRows(){
  const area=$('reminderRows');
