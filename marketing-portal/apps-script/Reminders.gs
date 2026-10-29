@@ -94,7 +94,7 @@ function remindHtml_(optoutUrl){
  +'</table></td></tr></table></body></html>';
 }
 function remindImages_(){
- const prop=PropertiesService.getScriptProperties(),iuc=prop.getProperty('IPGS_REMINDER_IUC_LOGO_ID'),ipgs=prop.getProperty('IPGS_REMINDER_IPGS_LOGO_ID');
+ const prop=PropertiesService.getScriptProperties(),iuc=prop.getProperty('IPGS_REMINDER_IUC_LOGO_ID')||'1KFqHWznQtlLJaOJWBbSFPjxzjOn-Intd',ipgs=prop.getProperty('IPGS_REMINDER_IPGS_LOGO_ID')||'1ZULh-d-DEhcvvGc9g69KNMF0OjzH-TBL';
  if(!iuc||!ipgs)throw Error('Approved IUC/IPGS inline logo IDs are not configured');
  return {iucLogo:DriveApp.getFileById(iuc).getBlob().setName('iuc.png'),ipgsLogo:DriveApp.getFileById(ipgs).getBlob().setName('ipgs.png')};
 }
@@ -161,7 +161,7 @@ function reminderStopPublic_(event){
 function enableDailyAdmissionReminders(){
  const actual=String(Session.getEffectiveUser().getEmail()||'').toLowerCase();
  if(actual!==REMINDER_SENDER)throw Error('Run this script under '+REMINDER_SENDER);
- if(!PropertiesService.getScriptProperties().getProperty('IPGS_REMINDER_IUC_LOGO_ID')||!PropertiesService.getScriptProperties().getProperty('IPGS_REMINDER_IPGS_LOGO_ID'))throw Error('Missing approved logos');
+ remindImages_(); // Verifies access to the approved IUC and IPGS logo files.
  ScriptApp.getProjectTriggers().filter(x=>x.getHandlerFunction()==='reminderDailyJob').forEach(x=>ScriptApp.deleteTrigger(x));
  ScriptApp.newTrigger('reminderDailyJob').timeBased().atHour(9).nearMinute(0).everyDays(1).inTimezone('Asia/Kuala_Lumpur').create();
  PropertiesService.getScriptProperties().setProperty('IPGS_REMINDERS_ENABLED','true');
