@@ -4,7 +4,7 @@ const A=MarketingAnalytics;
 let activeQuick="all",calendarInitialised=false,selectedDay=A.localDate(new Date().toISOString()),calendarMonth=selectedDay.slice(0,7);
 function save(){localStorage.setItem(KEY,JSON.stringify({tasks}))}
 const $=id=>document.getElementById(id),esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])),pct=(a,b)=>b?Math.round(a/b*100):0;
-const ADMISSION_REVIEW_STATUSES=['Not Set','Pending Screening','Documents Incomplete','Pending Follow-up','Qualified - Pending Activation','Sky Activation Verification','Sky Inactive (Verified)','Snapshot Sync Pending','Reactivation Pending','Continuing','Withdrawal Requested','Withdrawn','Deferred','Not Qualified'];
+const ADMISSION_REVIEW_STATUSES=['Not Set','Pending Screening','Documents Incomplete','Pending Follow-up','Qualified - Pending Activation','Sky Activation Verification','Sky Inactive (Verified)','Sky Suspended (Verified)','Snapshot Sync Pending','Reactivation Pending','Continuing','Withdrawal Requested','Withdrawn','Deferred','Not Qualified'];
 const ACC_ACTIVATED_REVIEW='ACC Activated / Snapshot Not Matched',ACC_INACTIVE='ACC Activated / Confirmed Inactive';
 let latestDiscrepancySave=null;
 const TERMINAL_ADMISSION_STATUSES=new Set(['Not Qualified','Withdrawal Requested','Withdrawn','Deferred']);
@@ -141,7 +141,7 @@ function renderPendingWorklist(){
  +'<div class="recon-tablewrap"><table class="pending-worklist-table"><thead><tr><th>Student / ACC Matric</th><th>Verified Sky Status</th><th>Staff Remark / Reason</th><th>Action</th></tr></thead><tbody>'
  +accDiscrepancies.map(x=>{
    const st=x.continuation?.status||'Not Set',reason=x.continuation?.reason||'';
-   const values=[...new Set([st,'Sky Status Verification','Sky Inactive (Verified)','Snapshot Sync Pending','Reactivation Pending'])];
+   const values=[...new Set([st,'Sky Status Verification','Sky Inactive (Verified)','Sky Suspended (Verified)','Snapshot Sync Pending','Reactivation Pending'])];
    const select=values.map(z=>'<option value="'+esc(z)+'" '+(st===z?'selected':'')+'>'+esc(z)+'</option>').join('');
    return '<tr><td><strong>'+esc(x.name)+'</strong><div class="muted">ACC Matric: '+esc(x.accMatric||'Not recorded')+'</div></td><td><span class="tag '+(st==='Sky Inactive (Verified)'?'amber':'blue')+'">'+esc(st==='Not Set'?'Not verified':st)+'</span></td><td class="discrepancy-remark">'+(reason?esc(reason):'<span class="muted">No remark saved — review required</span>')+(latestDiscrepancySave?.ok&&latestDiscrepancySave.id===x.id?'<div class="recon-inline-saved">✓ Saved and verified</div>':'')+'</td><td><button class="btn soft" type="button" onclick="openDiscrepancyEditor(event,\''+esc(x.id)+'\')">Edit Status &amp; Remark</button></td></tr>'
    +'<tr class="discrepancy-editor" hidden><td colspan="4"><form onsubmit="saveDiscrepancy(event,\''+esc(x.id)+'\')"><div class="discrepancy-fields"><label>Sky status (verified)<select name="status" required>'+select+'</select></label><label>Remark / reason (required)<textarea name="reason" rows="2" maxlength="2000" required placeholder="E.g. Verified in Sky on [date]: student is Inactive. Reason: ...">'+esc(reason)+'</textarea></label><button class="btn primary" type="submit">Save &amp; Verify</button></div><p class="small discrepancy-editor-feedback" role="status">Tracks Sky status reported by staff; does not modify Sky or ACC.</p></form></td></tr>';
