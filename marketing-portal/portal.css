@@ -54,3 +54,18 @@
 .ipgs-pending-worklist summary{font-size:12px;color:#3a5479;cursor:pointer;font-weight:650}
 .ipgs-pending-worklist .btn{font-size:11px;padding:8px 10px;white-space:nowrap}
 @media(max-width:740px){.ipgs-pending-worklist .pending-worklist-stats{grid-template-columns:1fr}.ipgs-pending-worklist{padding:14px}}
+
+/* Reconciliation staff editing */
+.ipgs-pending-worklist .discrepancy-remark{min-width:220px;max-width:420px;white-space:normal;overflow-wrap:anywhere;line-height:1.55}
+.ipgs-pending-worklist .discrepancy-editor[hidden]{display:none!important}
+.ipgs-pending-worklist .discrepancy-editor td{background:#f3f7ff;padding:15px 14px;border-top:1px solid #ccd9ee}
+.ipgs-pending-worklist .discrepancy-fields{display:grid;grid-template-columns:minmax(190px,.8fr) minmax(280px,1.6fr) auto;gap:12px;align-items:end}
+.ipgs-pending-worklist .discrepancy-fields label{display:flex;flex-direction:column;gap:6px;font-size:11px;font-weight:700;color:#506581}
+.ipgs-pending-worklist .discrepancy-fields select,.ipgs-pending-worklist .discrepancy-fields textarea{font:inherit;font-size:12px;border:1px solid #ccd6e6;border-radius:8px;padding:9px;background:white;width:100%;min-width:0}
+.ipgs-pending-worklist .discrepancy-fields textarea{resize:vertical;min-height:61px}
+.ipgs-pending-worklist .discrepancy-editor-feedback{margin-top:8px}
+.ipgs-pending-worklist .discrepancy-editor-feedback.error{color:#b3364a}
+.recon-save-result{padding:10px 14px;margin:0 0 14px;border-radius:9px;font-size:12px;font-weight:600;line-height:1.6}
+.recon-save-result.saved{background:#e8f6ef;color:#1b7757;border:1px solid #b7e4ce}
+.recon-save-result.error{background:#fff4e7;color:#956000;border:1px solid #f2d4ab}
+@media(max-width:850px){.ipgs-pending-worklist .discrepancy-fields{grid-template-columns:1fr;}}
