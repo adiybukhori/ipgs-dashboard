@@ -34,6 +34,29 @@ function remindBlocked_(c){
  if(Date.now()-Date.parse(c.registeredAt)<24*60*60*1000)return 'Within First 24 Hours';
  return '';
 }
+/**
+ * Fast read-only dashboard payload. All candidate Marketing/ACC/Sky data
+ * is already available in the authenticated portal's /api/marketing response.
+ * Never return opt-out tokens to the browser.
+ */
+function reminderStatus_(){
+ const rows=remindRows_().rows;
+ const records=rows.filter(r=>clean_(r[0])).map(r=>({
+  ic:clean_(r[0]),status:r[3]||'ACTIVE',
+  count:Number(r[4]||0),lastSentAt:r[5]||'',
+  nextDueAt:r[6]||'',reason:r[8]||'',
+  updatedAt:r[9]||'',lastError:r[10]||''
+ }));
+ const enabled=PropertiesService.getScriptProperties().getProperty('IPGS_REMINDERS_ENABLED')==='true';
+ return {ok:true,records,summary:{
+  mode:enabled?'ACTIVE':'PAUSED',totalSends:records.reduce((n,x)=>n+x.count,0),
+  stopped:records.filter(x=>x.status==='PAUSED').length,
+  notInterested:records.filter(x=>x.status==='NOT_INTERESTED').length,
+  optOutCTAFrom:REMINDER_OPT_OUT_CTA_FROM,
+  schedule:'Daily around 09:00 Asia/Kuala_Lumpur',
+  senderRequired:REMINDER_SENDER
+ }};
+}
 function reminderList_(input){
  const source=build_(),{map}=remindMap_(),emailCounts=new Map();
  source.candidates.forEach(c=>{const em=String(c.email||'').trim().toLowerCase();if(em)emailCounts.set(em,(emailCounts.get(em)||0)+1)});
