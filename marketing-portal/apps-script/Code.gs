@@ -59,6 +59,9 @@ function build_(){
  const acc=read_(SOURCES.acc,'V2_APPLICATIONS',2,8000,{3:'Student Name',4:'ID / Passport No',7:'Programme',10:'Intake',50:'SKY Activation Status',51:'SKY Student ID'},55);
  const tracker=read_(SOURCES.snapshot,'STUDENT_PAYMENT_TRACKER',5,10000,{0:'Student Status',2:'ID No',3:'Category',4:'Programme',5:'Intake'},6);
  const continuation=read_(SOURCES.marketing,'MARKETING_CONTINUATION_STATUS',2,500,{0:'IC / Passport',1:'Student Name',2:'Continuation Status'},7);
+ const aliasRows=read_(SOURCES.marketing,'IPGS_VERIFIED_ID_MATCHES',2,500,{0:'Marketing ID',1:'Snapshot ID',2:'Student Name',3:'Status',4:'Verification Evidence',5:'Verified By',6:'Verified Date'},7);
+ const verifiedAliases=new Map(),aliasSnapshotIds=new Set();
+ aliasRows.forEach(r=>{if(cell_(r,3)!=='VERIFIED')return;const marketingId=clean_(r[0]),skyId=clean_(r[1]);if(!marketingId||!skyId||marketingId===skyId||verifiedAliases.has(marketingId)||aliasSnapshotIds.has(skyId))throw Error('Invalid or duplicate verified identity match');verifiedAliases.set(marketingId,{skyId,name:cell_(r,2),evidence:cell_(r,4)});aliasSnapshotIds.add(skyId)});
  const continuationMap=new Map();
  continuation.forEach(r=>{const id=clean_(r[0]);if(id)continuationMap.set(id,{status:cell_(r,2)||'Not Set',reason:cell_(r,3),effectiveDate:cell_(r,4),updatedBy:cell_(r,5),updatedAt:cell_(r,6)})});
  const applied=new Map(),active=new Map();
@@ -69,8 +72,14 @@ function build_(){
  historic.forEach((r,i)=>{if(clean_(r[2]))leads.push({name:cell_(r,1),ic:cell_(r,2),email:cell_(r,4),programme:cell_(r,5),intake:cell_(r,11),origin:1,row:i+2,registeredAt:timestamp_(r[0]),sourceTab:'Data Briefing Session'})});
  const chosen=new Map(),registrations=new Map();
  leads.forEach(l=>{const id=clean_(l.ic),p=chosen.get(id);if(!p||l.origin>p.origin||(l.origin===p.origin&&((l.registeredAt||'')>(p.registeredAt||'')||l.registeredAt===p.registeredAt&&l.row>p.row)))chosen.set(id,l);if(!registrations.has(id))registrations.set(id,[]);registrations.get(id).push(event_(l))});
- const candidates=[];
- chosen.forEach((l,id)=>{const a=applied.get(id),s=active.get(id),events=registrations.get(id).sort((a,b)=>(b.registeredAt||'').localeCompare(a.registeredAt||'')),dated=events.filter(e=>e.registeredAt);candidates.push({
+ const candidates=[],previewSkyMatched=new Set();
+ chosen.forEach((l,id)=>{
+  const a=applied.get(id),alias=verifiedAliases.get(id),skyId=alias?alias.skyId:id,s=active.get(skyId);
+  if(alias&&s){
+   if(active.has(id)||clean_(l.name)!==clean_(s.name)||clean_(alias.name)!==clean_(s.name)||a&&clean_(a.name)!==clean_(s.name))throw Error('Verified identity match needs review');
+  }
+  if(s){if(previewSkyMatched.has(skyId))throw Error('More than one Marketing candidate mapped to same Sky ID');previewSkyMatched.add(skyId)}
+  const events=registrations.get(id).sort((a,b)=>(b.registeredAt||'').localeCompare(a.registeredAt||'')),dated=events.filter(e=>e.registeredAt);candidates.push({
  id:'C'+l.origin+'R'+l.row,name:l.name||a?.name||'',ic:l.ic,email:l.email,
  programme:canon_(l.programme||a?.programme||s?.programme),
  intake:intake_(l.intake||a?.intake||s?.intake),preferredIntakeOriginal:l.intake,
@@ -80,14 +89,16 @@ function build_(){
  firstRegisteredAt:dated.length?dated[dated.length-1].registeredAt:null,
  registrationEvents:events,registrationCount:events.length,
  sourceTab:l.sourceTab,snapshotCategory:s?s.category:null,accSkyStatus:a?.skyActivationStatus||'',accMatric:a?.matric||'',
+ snapshotId:s?skyId:'',identityMatchMethod:s?(alias?'Verified ID cross-reference':'Exact ID'):'No Active match',identityMatchNote:s&&alias?alias.evidence:'',
+ accIntake:a?.intake||'',skyIntake:s?.intake||'',intakeReview:!!s&&!!a&&intake_(s.intake)!==intake_(a.intake),
  continuation:continuationMap.get(id)||{status:'Not Set',reason:'',effectiveDate:'',updatedBy:'',updatedAt:''},
  categoryReview:!!s&&s.category!=='Internal'
  })});
  candidates.sort((a,b)=>(b.registeredAt||'').localeCompare(a.registeredAt||'')||a.name.localeCompare(b.name));
  const accCount=candidates.filter(x=>x.accFound).length,activeCount=candidates.filter(x=>x.activated).length;
  const internalActive=[...active.entries()].filter(([id,x])=>x.category==='Internal');
- const internalPreview=internalActive.filter(([id])=>chosen.has(id));
- const internalOutside=internalActive.filter(([id])=>!chosen.has(id)).map(([id,x])=>({
+ const internalPreview=internalActive.filter(([id])=>previewSkyMatched.has(id));
+ const internalOutside=internalActive.filter(([id])=>!previewSkyMatched.has(id)).map(([id,x])=>({
    id:'OUT-'+id,name:x.name,ic:id,programme:canon_(x.programme),intake:intake_(x.intake),snapshotCategory:'Internal',
    accFound:applied.has(id),accName:applied.get(id)?.name||'',accMatric:applied.get(id)?.matric||''
  }));
@@ -105,7 +116,7 @@ function build_(){
  appliedC.forEach(x=>{const k=statusOf(x);applicationBreakdown[k]=(applicationBreakdown[k]||0)+1});
  const pendingDetails=appliedC.filter(x=>!x.activated).map(x=>({name:x.name,ic:x.ic,programme:x.programme,status:statusOf(x),accSkyStatus:x.accSkyStatus,matric:x.accMatric,reason:x.continuation.reason}));
  return {ok:true,refreshedAt:new Date().toISOString(),candidates,internalOutside,pendingDetails,summary:{
- internalTotalActive:internalActive.length,internalFromPreview:internalPreview.length,internalOutsidePreview:internalOutside.length,applicationBreakdown,
+ internalTotalActive:internalActive.length,internalFromPreview:internalPreview.length,internalOutsidePreview:internalOutside.length,verifiedIdMatches:candidates.filter(x=>x.activated&&x.identityMatchMethod==='Verified ID cross-reference').length,applicationBreakdown,
  registrations:leads.length,unique:candidates.length,duplicateRegistrations:leads.length-candidates.length,
  notApplied:candidates.filter(x=>!x.accFound).length,
  applied:accCount,activated:activeCount,
