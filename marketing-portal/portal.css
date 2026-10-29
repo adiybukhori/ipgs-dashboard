@@ -34,3 +34,23 @@
 .ipgs-reconciliation table{width:100%;font-size:11px;border-collapse:collapse;}
 .ipgs-reconciliation td,.ipgs-reconciliation th{padding:7px 10px;text-align:left;border-bottom:1px solid #edf1f7;}
 @media(max-width:900px){.cards .card .ctop{font-size:11px}.cards .kpi-mini{font-size:9px}.ipgs-reconciliation .recon-totals{gap:12px}}
+
+/* ACC pending admission officer worklist */
+.ipgs-pending-worklist{background:#fff;border:1px solid #dce5f1;border-radius:14px;padding:20px;margin:18px 0;box-shadow:0 3px 14px #11234008}
+.ipgs-pending-worklist .panelhead{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:15px}
+.ipgs-pending-worklist .panelhead .buttons{display:flex;flex-wrap:wrap;gap:8px}
+.ipgs-pending-worklist .pending-worklist-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:12px}
+.ipgs-pending-worklist .pending-worklist-stats>div{background:#f6f8fc;border:1px solid #e6ebf2;border-radius:9px;padding:11px 13px;display:flex;flex-direction:column;gap:3px}
+.ipgs-pending-worklist .pending-worklist-stats small{color:#62738a;font-size:11px}
+.ipgs-pending-worklist .pending-worklist-stats strong{font-size:25px;font-variant-numeric:tabular-nums;color:#173454}
+.ipgs-pending-worklist .recon-tablewrap{overflow:auto;max-height:420px;border:1px solid #e5eaf2;border-radius:9px}
+.ipgs-pending-worklist table{width:100%;border-collapse:collapse;font-size:12px}
+.ipgs-pending-worklist th{background:#f4f7fc;color:#576a84;font-size:10px;text-transform:uppercase;letter-spacing:.2px;text-align:left}
+.ipgs-pending-worklist td,.ipgs-pending-worklist th{padding:10px 12px;border-bottom:1px solid #edf0f5;vertical-align:middle}
+.ipgs-pending-worklist td:first-child{min-width:175px}
+.ipgs-pending-worklist tr[data-candidate]{cursor:pointer}
+.ipgs-pending-worklist tr[data-candidate]:hover{background:#f7f9ff}
+.ipgs-pending-worklist details{margin-top:14px}
+.ipgs-pending-worklist summary{font-size:12px;color:#3a5479;cursor:pointer;font-weight:650}
+.ipgs-pending-worklist .btn{font-size:11px;padding:8px 10px;white-space:nowrap}
+@media(max-width:740px){.ipgs-pending-worklist .pending-worklist-stats{grid-template-columns:1fr}.ipgs-pending-worklist{padding:14px}}
