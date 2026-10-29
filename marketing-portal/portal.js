@@ -121,6 +121,7 @@ function renderPendingWorklist(){
   if(target?.parentElement)target.parentElement.insertBefore(root,target);
  }
  if(!root)return;
+ const admissionOpsOpen=root.querySelector('details.ipgs-admission-ops')?.open||false;
  const pending=pendingAdmissionCandidates();
  const accDiscrepancies=accActivatedSnapshotReviews();
  const confirmedInactive=accDiscrepancies.filter(x=>x.processingCategory===ACC_INACTIVE);
@@ -146,6 +147,10 @@ function renderPendingWorklist(){
    +'<tr class="discrepancy-editor" hidden><td colspan="4"><form onsubmit="saveDiscrepancy(event,\''+esc(x.id)+'\')"><div class="discrepancy-fields"><label>Sky status (verified)<select name="status" required>'+select+'</select></label><label>Remark / reason (required)<textarea name="reason" rows="2" maxlength="2000" required placeholder="E.g. Verified in Sky on [date]: student is Inactive. Reason: ...">'+esc(reason)+'</textarea></label><button class="btn primary" type="submit">Save &amp; Verify</button></div><p class="small discrepancy-editor-feedback" role="status">Tracks Sky status reported by staff; does not modify Sky or ACC.</p></form></td></tr>';
  }).join('')+'</tbody></table></div></details>'
  +'<details><summary>View non-active cases with recorded decisions ('+alreadyFlagged.length+')</summary><div class="recon-tablewrap"><table><thead><tr><th>Student</th><th>Decision</th><th>Remark</th></tr></thead><tbody>'+alreadyFlagged.map(x=>'<tr data-candidate="'+esc(x.id)+'"><td>'+esc(x.name)+'</td><td>'+esc(x.continuation.status)+'</td><td>'+esc(x.continuation.reason||'Not recorded')+'</td></tr>').join('')+'</tbody></table></div></details>';
+ // Keep Registry operations available without mixing ACC information into Marketing Closing KPIs.
+ const operationalContent=root.innerHTML;
+ root.innerHTML='<details class="ipgs-admission-ops"><summary>Admission Operations — Detailed Registry Worklist ('+pending.length+' pending; '+accDiscrepancies.length+' ACC-activated cases)</summary><p class="small">For Registry review only. These ACC records do not contribute to the Marketing closing KPI until confirmed Active under Internal IPGS in Sky.</p>'+operationalContent+'</details>';
+ root.querySelector('details.ipgs-admission-ops').open=admissionOpsOpen;
 }
 function openDiscrepancyEditor(e,id){
  e.preventDefault();e.stopPropagation();
