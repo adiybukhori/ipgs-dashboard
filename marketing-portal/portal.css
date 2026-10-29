@@ -71,3 +71,9 @@
 @media(max-width:850px){.ipgs-pending-worklist .discrepancy-fields{grid-template-columns:1fr;}}
 
 .ipgs-pending-worklist .recon-inline-saved{font-size:11px;color:#187554;font-weight:700;margin-top:5px}
+
+
+/* Admission worklist remains accessible to Registry but is collapsed on the Marketing closing dashboard. */
+.ipgs-pending-worklist .ipgs-admission-ops>summary{cursor:pointer;color:#214469;font-size:13px;font-weight:700;line-height:1.5;padding:4px 0;}
+.ipgs-pending-worklist .ipgs-admission-ops>p{margin:12px 0;}
+.ipgs-pending-worklist .ipgs-admission-ops[open]>summary{margin-bottom:16px;border-bottom:1px solid #e3eaf4;padding-bottom:12px;}
