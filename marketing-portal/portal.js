@@ -144,8 +144,8 @@ function navigatePendingAdmissions(){
 function downloadPendingAdmissionsCSV(){
  const list=pendingAdmissionCandidates();
  const rows=[['Student Name','IC / Passport','Email','Programme','Preferred Intake','ACC Applied','Snapshot Active','Processing Status','Remark / Reason','Last Updated'],...list.map(x=>[x.name,x.ic,x.email,x.programme,x.intake,'YES','NO',x.continuation?.status||'Not Set',x.continuation?.reason||'',x.continuation?.updatedAt||''])];
- const safe=x=>{const v=String(x??'');return /^[=+@\\-\\t\\r]/.test(v)?"'"+v:v};
- const csv='\\ufeff'+rows.map(row=>row.map(value=>'"'+safe(value).replace(/"/g,'""')+'"').join(',')).join('\\r\\n');
+ const safe=value=>{const v=String(value??'');return /^[=+@-]/.test(v)?"'"+v:v};
+ const csv=String.fromCharCode(0xFEFF)+rows.map(row=>row.map(value=>'"'+safe(value).replace(/"/g,'""')+'"').join(',')).join(String.fromCharCode(13,10));
  const link=document.createElement('a'),url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
  link.href=url;link.download='ipgs-acc-pending-activation-'+new Date().toISOString().slice(0,10)+'.csv';link.click();URL.revokeObjectURL(url);
 }
