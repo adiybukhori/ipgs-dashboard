@@ -29,48 +29,42 @@ function updateKpiCard(id,label,hint){
  if(top?.firstChild)top.firstChild.textContent=label+' ';
  if(small)small.innerHTML=hint;
 }
+function isClosedInternal(x){return x.activated===true&&x.snapshotCategory==='Internal'}
 function summaries(){
- const n=data.length,ap=data.filter(x=>x.accFound).length,ac=data.filter(x=>x.activated).length;
- const m=summaryBreakdown(),v=m?.v;
- const nApplied=v?.applied??ap;
- const internalMarketingActive=data.filter(x=>x.activated&&x.snapshotCategory==='Internal').length;
- const internalAppliedActive=data.filter(x=>x.activated&&x.accFound&&x.snapshotCategory==='Internal').length;
- const otherCategoryAppliedActive=data.filter(x=>x.activated&&x.accFound&&x.snapshotCategory!=='Internal').length;
- $("kInterested").textContent=n;
- $("kPending").textContent=n-nApplied;
- $("kApplied").textContent=nApplied;
- // Never display all-category marketing activation as the IPGS Sales closing KPI.
- $("kActivated").textContent=m?String(v.internalTotalActive):'—';
- updateKpiCard('kInterested','Marketing Form Leads','Unique preview / marketing form registrations');
- updateKpiCard('kPending','Marketing Leads Not Matched to ACC','From the Marketing Form; check identity exceptions before follow-up');
- updateKpiCard('kApplied','Applied in ACC · From Marketing Form',m
-  ?'<div class="kpi-breakdown"><span class="kpi-mini ok"><b>'+m.active+'</b> ACC + Sky Active ('+internalAppliedActive+' Internal, '+otherCategoryAppliedActive+' other categories)</span><span class="kpi-mini warn"><b>'+m.accInactive+'</b> Sky Inactive</span><span class="kpi-mini warn"><b>'+m.accSuspended+'</b> Suspended</span><span class="kpi-mini"><b>'+m.accActivatedReview+'</b> Unresolved Snapshot Match</span><span class="kpi-mini warn"><b>'+m.pending+'</b> Pending Review</span><span class="kpi-mini"><b>'+m.notQualified+'</b> Not Qualified</span><span class="kpi-mini"><b>'+m.withdrawalRequested+'</b> Withdrawal Requested</span>'+(m.withdrawn?'<span class="kpi-mini"><b>'+m.withdrawn+'</b> Withdrawn</span>':'')+(m.deferred?'<span class="kpi-mini"><b>'+m.deferred+'</b> Deferred</span>':'')+'</div><div class="kpi-foot">'+(m.sum===nApplied?'✓ '+nApplied+' applications accounted for once':'⚠ Reconciliation mismatch')+' · this ACC cohort spans multiple categories; do not compare with Internal IPGS Active</div>'
-  :'Awaiting live ACC application status reconciliation');
- updateKpiCard('kActivated','Internal IPGS Active · Sky Snapshot',m
-  ?'<div class="kpi-breakdown"><span class="kpi-mini ok"><b>'+v.internalFromPreview+'</b> Internal IPGS From Preview</span><span class="kpi-mini"><b>'+v.internalOutsidePreview+'</b> Internal IPGS Outside Preview</span></div><div class="kpi-foot">'+(v.internalFromPreview+v.internalOutsidePreview===v.internalTotalActive?'✓ Matched to Snapshot category Internal':'⚠ Internal category count mismatch')+' · DPLI excluded</div>'
-  :'Awaiting live Internal IPGS Snapshot reconciliation');
+ const leads=data.length,scope=summaryBreakdown(),v=scope?.v;
+ const fromPreview=v?Number(v.internalFromPreview):null,outside=v?Number(v.internalOutsidePreview):null,total=v?Number(v.internalTotalActive):null;
+ const notClosed=fromPreview===null?null:Math.max(0,leads-fromPreview);
+ const previewCount=data.filter(isClosedInternal).length;
+ const consistent=v&&Number.isInteger(fromPreview)&&Number.isInteger(outside)&&Number.isInteger(total)&&fromPreview===previewCount&&fromPreview+outside===total&&fromPreview<=leads;
+ $("kInterested").textContent=String(leads);
+ $("kPending").textContent=consistent?String(notClosed):'—';
+ $("kApplied").textContent=consistent?String(fromPreview):'—';
+ $("kActivated").textContent=consistent?String(total):'—';
+ updateKpiCard('kInterested','Marketing Form Leads','Unique registrations from IPGS marketing / preview forms');
+ updateKpiCard('kPending','Not Yet Closed · Internal IPGS',
+  consistent?'<div class="kpi-foot">Leads not currently Active as Internal IPGS in Sky. Some may already have ACC applications, be Inactive, or belong to another category. <b>Not equal to “Not Applied”.</b></div>':'Awaiting verified Internal IPGS Snapshot reconciliation');
+ updateKpiCard('kApplied','Closed · From Marketing Form',
+  consistent?'<div class="kpi-breakdown"><span class="kpi-mini ok"><b>'+fromPreview+'</b> Verified Sky Active · Internal IPGS</span></div><div class="kpi-foot">Counted only after an Active match in Sky Snapshot. ACC submission alone is not a closing.</div>':'Awaiting verified Internal IPGS Snapshot reconciliation');
+ updateKpiCard('kActivated','Total Active · Internal IPGS',
+  consistent?'<div class="kpi-breakdown"><span class="kpi-mini ok"><b>'+fromPreview+'</b> From Marketing Form</span><span class="kpi-mini"><b>'+outside+'</b> Outside Preview</span></div><div class="kpi-foot">✓ Same as Snapshot Active in Internal IPGS category · DPLI excluded</div>':'Awaiting verified Internal IPGS Snapshot reconciliation');
  const cards=document.querySelector('#kInterested')?.closest('.cards');
  if(cards){
   let note=document.getElementById('ipgsKpiScopeNote');
   if(!note){note=document.createElement('p');note.id='ipgsKpiScopeNote';note.className='kpi-scope-note';cards.insertAdjacentElement('afterend',note)}
-  note.textContent=m
-   ?'IPGS Closing (Sky Internal category): '+v.internalFromPreview+' Active From Preview + '+v.internalOutsidePreview+' Outside Preview = '+v.internalTotalActive+' Total Active. Separately, '+m.active+' ACC applicants are Active across ALL Sky categories ('+internalAppliedActive+' Internal + '+otherCategoryAppliedActive+' other categories). These are different cohorts; do not add or subtract one from the other.'
-   :'The Internal IPGS Active KPI requires live reconciliation. Marketing Form Active (all categories) is intentionally not shown as Internal IPGS closing.';
+  note.textContent=consistent
+   ?'IPGS Marketing Closing: '+leads+' leads = '+fromPreview+' confirmed Active from Marketing + '+notClosed+' not yet counted as Internal IPGS Active. Snapshot Internal IPGS Active = '+fromPreview+' from Marketing + '+outside+' Outside Preview = '+total+'. “Not Yet Closed” does NOT mean no ACC admission form was submitted.'
+   :'Unable to confirm the Marketing-to-Snapshot closing reconciliation. The dashboard does not assume ACC submission or activation.';
  }
- // The cohort-specific funnel must not show all-category Active as IPGS closing.
- const preview=m?Number(v.internalFromPreview):null,outside=m?Number(v.internalOutsidePreview):null;
- const steps=[['Marketing Form Leads',n,'',true],['Applied in ACC · from Marketing Form',nApplied,'light',true]];
- if(m){
-  steps.push(['Internal IPGS Active · from Preview',preview,'green',true],['Internal IPGS Active · outside Preview',outside,'green',false],['TOTAL Internal IPGS Active · Sky',v.internalTotalActive,'green',false]);
- }
- $("funnel").innerHTML=steps.map(([name,count,color,rate])=>'<div class="progress"><div class="progtitle"><span>'+esc(name)+'</span><span>'+count+(rate?' <span class="muted">/ '+pct(count,n)+'% of preview leads</span>':' <span class="muted">/ Snapshot</span>')+'</span></div><div class="track"><div class="fill '+color+'" style="width:'+pct(count,rate?n:(v?.internalTotalActive||1))+'%"></div></div></div>').join('');
- const funnelCaption=$("funnel")?.nextElementSibling;
- if(funnelCaption?.classList.contains('small'))funnelCaption.textContent='Marketing Form conversion rates use the preview cohort only. Outside Preview and Total Internal IPGS Active are separate Snapshot-based counts (no preview conversion rate).';
- const prog={};data.forEach(x=>prog[x.programme]=(prog[x.programme]||0)+1);
- $("programmeChart").innerHTML=Object.entries(prog).sort((a,b)=>b[1]-a[1]).map(([p,count])=>'<div class="chartrow"><span>'+esc(p)+'</span><div class="track"><div class="fill" style="width:'+pct(count,data.length)+'%"></div></div><b>'+count+'</b></div>').join('')||'<div class="empty">No candidates yet</div>';
- $("miniIntakes").innerHTML=intakeGroups().slice(0,6).map(x=>'<tr><td><strong>'+esc(x.programme)+'</strong></td><td>'+esc(x.intake)+'</td><td>'+x.n+'</td><td>'+x.ap+'</td><td>'+x.ac+'</td><td>'+pct(x.ac,x.n)+'%</td></tr>').join('');
+ const steps=[['Marketing Form Leads',leads,'',true]];
+ if(consistent)steps.push(['Verified Internal IPGS Closed · From Marketing',fromPreview,'green',true],['Not Yet Closed · Internal IPGS',notClosed,'light',true],['Active Outside Preview',outside,'green',false],['TOTAL Internal IPGS Active · Sky',total,'green',false]);
+ $("funnel").innerHTML=steps.map(([name,count,color,preview])=>'<div class="progress"><div class="progtitle"><span>'+esc(name)+'</span><span>'+count+(preview?' <span class="muted">/ '+pct(count,leads)+'% of marketing leads</span>':' <span class="muted">/ Snapshot</span>')+'</span></div><div class="track"><div class="fill '+color+'" style="width:'+pct(count,preview?leads:(total||1))+'%"></div></div></div>').join('');
+ const caption=$("funnel")?.nextElementSibling;
+ if(caption?.classList.contains('small'))caption.textContent='Closing is verified only from Sky Active with category Internal IPGS. ACC applications and inactive cases remain available in Admission Operations but are not treated as closed sales.';
+ const programmes={};data.forEach(x=>programmes[x.programme]=(programmes[x.programme]||0)+1);
+ $("programmeChart").innerHTML=Object.entries(programmes).sort((a,b)=>b[1]-a[1]).map(([p,count])=>'<div class="chartrow"><span>'+esc(p)+'</span><div class="track"><div class="fill" style="width:'+pct(count,leads)+'%"></div></div><b>'+count+'</b></div>').join('')||'<div class="empty">No candidates yet</div>';
+ $("miniIntakes").innerHTML=intakeGroups().slice(0,6).map(x=>'<tr><td><strong>'+esc(x.programme)+'</strong></td><td>'+esc(x.intake)+'</td><td>'+x.n+'</td><td>'+x.cl+'</td><td>'+(x.n-x.cl)+'</td><td>'+pct(x.cl,x.n)+'%</td></tr>').join('');
 }
-function intakeGroups(){const m={};data.forEach(x=>{const k=x.programme+"|"+x.intake;if(!m[k])m[k]={programme:x.programme,intake:x.intake,n:0,ap:0,ac:0};m[k].n++;if(x.accFound)m[k].ap++;if(x.activated)m[k].ac++});return Object.values(m).sort((a,b)=>a.programme.localeCompare(b.programme)||a.intake.localeCompare(b.intake))}
+function intakeGroups(){const m={};data.forEach(x=>{const k=x.programme+"|"+x.intake;if(!m[k])m[k]={programme:x.programme,intake:x.intake,n:0,ap:0,ac:0,cl:0};m[k].n++;if(x.accFound)m[k].ap++;if(x.activated)m[k].ac++;if(isClosedInternal(x))m[k].cl++});return Object.values(m).sort((a,b)=>a.programme.localeCompare(b.programme)||a.intake.localeCompare(b.intake))}
 function populate(id,items,label){const e=$(id),old=e.value,counts={};items.filter(Boolean).forEach(x=>counts[x]=(counts[x]||0)+1);e.innerHTML=`<option value="">${label}</option>`+Object.keys(counts).sort().map(x=>`<option value="${esc(x)}">${esc(x)} (${counts[x]})</option>`).join("");e.value=Object.hasOwn(counts,old)?old:''}
 function candidateFilters(){return {continuation:document.getElementById('filterContinuation')?.value||'',search:$("search").value,programme:$("filterProgramme").value,intake:$("filterIntake").value,from:$("filterFrom").value,to:$("filterTo").value,acc:$("filterAcc").value,activation:$("filterActivation").value,category:$("filterCategory").value,source:$("filterSource").value,sort:$("candidateSort").value}}
 function categoryBadge(x){return `<span class="tag ${x.activated?(x.snapshotCategory==='Internal'?'green':'category-warning'):'gray'}">${esc(A.categoryLabel(x.snapshotCategory))}</span>`}
@@ -116,7 +110,7 @@ function renderCalendar(){
 }
 function viewSessionCandidates(){resetCandidateFilters();const f=calendarFilters();$("filterFrom").value=selectedDay;$("filterTo").value=selectedDay;$("filterProgramme").value=f.programme;$("filterIntake").value=f.intake;$("filterSource").value=f.source;$("datePreset").value='custom';navigate('candidates')}
 function openPreviewDate(date){selectCalendarDate(date);navigate('preview')}
-function renderRecentSessions(){const rows=Object.values(A.days(data)).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,4);$("recentSessions").innerHTML=rows.map(r=>`<button class="recent-session" data-preview-date="${r.date}"><span>${esc(A.formatDate(r.date+'T12:00:00+08:00',false))}</span><strong>${r.unique} <span class="small">registrations</span></strong><small>${r.applied} in ACC · ${r.active} Sky Active (all categories)</small></button>`).join('')||'<p class="small">Registration dates will appear after data is connected.</p>'}
+function renderRecentSessions(){const rows=Object.values(A.days(data)).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,4),closedDays=A.days(data.filter(isClosedInternal));$("recentSessions").innerHTML=rows.map(r=>`<button class="recent-session" data-preview-date="${r.date}"><span>${esc(A.formatDate(r.date+'T12:00:00+08:00',false))}</span><strong>${r.unique} <span class="small">registrations</span></strong><small>${closedDays[r.date]?.unique||0} closed · verified Internal IPGS Active</small></button>`).join('')||'<p class="small">Registration dates will appear after data is connected.</p>'}
 function renderIntakes(){const p=$("intakeProgramme").value,y=$("intakeYear").value;$("intakeRows").innerHTML=intakeGroups().filter(x=>(!p||x.programme===p)&&(!y||x.intake.includes(y))).map(x=>`<tr><td><strong>${esc(x.programme)}</strong></td><td>${esc(x.intake)}</td><td>${x.n}</td><td>${x.n-x.ap}</td><td>${x.ap}</td><td>${x.ac}</td><td>${pct(x.ac,x.n)}%</td></tr>`).join("")||'<tr><td colspan="7" class="empty">No intake records found.</td></tr>'}
 function renderTasks(){const due=new Date().toISOString().slice(0,10);$("taskOpen").textContent=tasks.filter(x=>!x.done).length;$("taskDone").textContent=tasks.filter(x=>x.done).length;$("taskDue").textContent=tasks.filter(x=>!x.done&&x.due<=due).length;$("taskRows").innerHTML=tasks.map(x=>`<tr><td>${esc(x.name)}</td><td><strong>${esc(x.activity)}</strong></td><td>${esc(x.due)}</td><td><span class="tag ${x.done?"green":"amber"}">${x.done?"Completed":"Open"}</span></td><td><button class="btn" onclick="event.stopPropagation();toggleTask('${esc(x.id)}')">${x.done?"Reopen":"Complete"}</button></td></tr>`).join("")||'<tr><td colspan="5" class="empty">No follow-up tasks yet. Add your first task.</td></tr>'}
 function renderPendingWorklist(){
@@ -207,27 +201,21 @@ function renderReconciliation(){
  }
  if(!panel)return;
  const m=summaryBreakdown(),v=m?.v;
- if(!m){panel.innerHTML='<h3>IPGS Reconciliation</h3><p>Live Snapshot and ACC application breakdown are not available. IPGS Active is not inferred from Marketing Form Active.</p>';return}
- const outside=window.ipgsOutside||[],pending=window.ipgsPending||[];
- const balanced=m.sum===v.applied,internalMatched=v.internalFromPreview+v.internalOutsidePreview===v.internalTotalActive;
- const internalAppliedActive=data.filter(x=>x.accFound&&x.activated&&x.snapshotCategory==='Internal').length;
- const internalPreviewNoACC=data.filter(x=>!x.accFound&&x.activated&&x.snapshotCategory==='Internal').length;
- const otherAppliedActive=data.filter(x=>x.accFound&&x.activated&&x.snapshotCategory!=='Internal').length;
- const regInactive=data.filter(x=>x.accFound&&!x.activated&&x.continuation?.status==='Sky Inactive (Verified)').length;
- const regSuspended=data.filter(x=>x.accFound&&!x.activated&&x.continuation?.status==='Sky Suspended (Verified)').length;
- const regWithdrawn=data.filter(x=>x.accFound&&!x.activated&&x.continuation?.status==='Withdrawn').length;
- const statusItems=[['Active in Sky (applied Marketing leads · all categories)',m.active],[ACC_ACTIVATED_REVIEW,m.accActivatedReview],[ACC_INACTIVE,m.accInactive],[ACC_SUSPENDED,m.accSuspended],['Pending Review / Activation',m.pending],['Not Qualified',m.notQualified],['Withdrawal Requested',m.withdrawalRequested],['Withdrawn',m.withdrawn],['Deferred',m.deferred]];
- panel.innerHTML='<h3>IPGS Sales &amp; Marketing — Internal Active (Sky)</h3>'
- +'<div class="recon-totals"><div><small>From Preview · Internal</small><strong>'+v.internalFromPreview+'</strong></div><div><small>Outside Preview · Internal</small><strong>'+v.internalOutsidePreview+'</strong></div><div><small>Total Internal IPGS Active</small><strong>'+v.internalTotalActive+'</strong></div></div>'
- +'<div class="small">'+(internalMatched?'✓ Matches Sky Snapshot Internal category':'⚠ Snapshot mismatch')+' · DPLI and all external agents excluded.</div>'
- +'<p class="small"><strong>Additional statuses, not Active:</strong> '+regInactive+' temporarily Inactive (classes not started), '+regSuspended+' Suspended, '+regWithdrawn+' Withdrawn. They are NOT in '+v.internalTotalActive+' currently Active Snapshot records. If all '+regInactive+' return to Active in the Internal category with no other changes, the future total could become '+(v.internalTotalActive+regInactive)+' — this is a hypothetical, not today’s closing. The '+m.pending+' Pending Review cases must not be added to Active, and may include DPLI.</p>'
- +'<hr><h3>Why ACC Active differs from Internal IPGS Active</h3>'
- +'<p class="small"><b>'+m.active+' Applied ACC + Sky Active</b> = '+internalAppliedActive+' Internal + '+otherAppliedActive+' other categories. <b>'+v.internalTotalActive+' Internal IPGS Sky Active</b> = '+internalAppliedActive+' Internal with ACC + '+internalPreviewNoACC+' Active from Marketing without matched ACC + '+v.internalOutsidePreview+' Outside Preview. These are different cohorts.</p>'
- +'<hr><h3>Marketing Form → ACC Applications (separate cohort)</h3>'
- +'<p class="recon-equation"><b>'+v.applied+' Applied</b> = '+statusItems.map(([label,count])=>'<span><b>'+count+'</b> '+esc(label)+'</span>').join(' + ')+' <b class="'+(balanced?'recon-ok':'recon-error')+'">'+(balanced?'✓ Balanced':'⚠ Mismatch')+'</b></p>'
- +'<p class="small"><b>Important:</b> '+v.applied+' refers to Marketing Form applicants across all categories. '+v.internalTotalActive+' refers only to Internal IPGS Active students, including those outside preview. Never compare them as one cohort. Pending is not automatically Not Qualified.</p>'
- +'<details><summary>Outside Preview · Internal Active — '+outside.length+' students</summary><div class="recon-tablewrap"><table><thead><tr><th>Student</th><th>Programme</th><th>ACC</th></tr></thead><tbody>'+outside.map(x=>'<tr><td>'+esc(x.name)+'</td><td>'+esc(x.programme)+'</td><td>'+(x.accFound?'Matched':'Not matched')+'</td></tr>').join('')+'</tbody></table></div></details>'
- +'<details><summary>Marketing ACC Applied but not Active — review '+pending.length+' cases</summary><div class="recon-tablewrap"><table><thead><tr><th>Student</th><th>Classification</th><th>ACC activation</th><th>Remark</th></tr></thead><tbody>'+pending.map(x=>'<tr><td>'+esc(x.name)+'</td><td>'+esc(x.status)+'</td><td>'+esc(x.accSkyStatus||'Not confirmed')+'</td><td>'+esc(x.reason||'Requires review')+'</td></tr>').join('')+'</tbody></table></div></details>';
+ if(!m){panel.innerHTML='<h3>Marketing Closing Verification</h3><p>Waiting for live Sky Snapshot reconciliation. No unverified Active or admission status is assumed.</p>';return}
+ const n=data.length,preview=Number(v.internalFromPreview),outside=Number(v.internalOutsidePreview),total=Number(v.internalTotalActive);
+ const verifiedCount=data.filter(isClosedInternal).length,closedOk=preview===verifiedCount&&preview+outside===total&&preview<=n;
+ const otherActive=data.filter(x=>x.activated&&x.snapshotCategory!=='Internal').length;
+ const appBalanced=m.sum===Number(v.applied);
+ const entries=[['ACC Applied + Sky Active · all categories',m.active],['ACC Activated / Snapshot Not Matched',m.accActivatedReview],['Temporarily Inactive',m.accInactive],['Suspended',m.accSuspended],['Pending Admission Review',m.pending],['Not Qualified',m.notQualified],['Withdrawn',m.withdrawn],['Withdrawal Requested',m.withdrawalRequested],['Deferred',m.deferred]];
+ const outsideList=window.ipgsOutside||[];
+ panel.innerHTML='<h3>Marketing Closing — Verified Against Sky Snapshot</h3>'
+ +'<div class="recon-totals"><div><small>Marketing Form Leads</small><strong>'+n+'</strong></div><div><small>Closed · From Marketing</small><strong>'+preview+'</strong></div><div><small>Not Yet Closed</small><strong>'+(n-preview)+'</strong></div></div>'
+ +'<div class="recon-equation"><strong>'+preview+' Active From Marketing</strong> + <strong>'+outside+' Active Outside Preview</strong> = <strong>'+total+' Total Internal IPGS Active</strong> <b class="'+(closedOk?'recon-ok':'recon-error')+'">'+(closedOk?'✓ Matched to Sky':'⚠ Check Snapshot / identity matching')+'</b></div>'
+ +'<p class="small">Only current Sky Active with category Internal / IPGS Sales &amp; Marketing is counted as closed. DPLI and agent / partner categories are excluded. '+(n-preview)+' Not Yet Closed is NOT a claim that those leads have never submitted an admission form.</p>'
+ +(otherActive?'<p class="small">'+otherActive+' Marketing Form leads are Active in Sky under OTHER categories and are deliberately excluded from Internal IPGS closing pending ownership verification.</p>':'')
+ +'<details><summary>Outside Preview — '+outside+' active students</summary><div class="recon-tablewrap"><table><thead><tr><th>Student</th><th>Programme</th><th>ACC</th></tr></thead><tbody>'+outsideList.map(x=>'<tr><td>'+esc(x.name)+'</td><td>'+esc(x.programme)+'</td><td>'+(x.accFound?'Matched':'Not matched')+'</td></tr>').join('')+'</tbody></table></div></details>'
+ +'<details><summary>Admission Operations (internal review only — excluded from closing KPI)</summary><p class="small">ACC applications are still tracked accurately for Registry. Submitting ACC does not by itself indicate Sky Active.</p>'
+ +'<p class="recon-equation">'+v.applied+' ACC applied = '+entries.map(([name,value])=>'<span>'+value+' '+esc(name)+'</span>').join(' + ')+' <b class="'+(appBalanced?'recon-ok':'recon-error')+'">'+(appBalanced?'✓ Balanced':'⚠ Mismatch')+'</b></p></details>';
 }
 function render(){if(!document.getElementById('filterContinuation')){const select=document.createElement('select');select.id='filterContinuation';select.setAttribute('aria-label','Student continuation status');select.innerHTML='<option value="">All continuation statuses</option>'+ADMISSION_REVIEW_STATUSES.filter(x=>x!=='Not Set').concat('Not Set').map(x=>'<option value="'+x+'">'+x+'</option>').join('');select.onchange=renderCandidates;document.getElementById('quickFilters')?.parentElement?.insertBefore(select,document.getElementById('quickFilters'));}populate("filterProgramme",data.map(x=>x.programme),"All Programmes");populate("filterIntake",data.map(x=>x.intake),"All Intakes");populate("calendarProgramme",data.map(x=>x.programme),"All Programmes");populate("calendarIntake",data.map(x=>x.intake),"All Intakes");populate("intakeProgramme",data.map(x=>x.programme),"All Programmes");populate("intakeYear",data.map(x=>x.intake.match(/\d{4}/)?.[0]),"All Years");const e=$("filterCategory"),old=e.value,values=[...new Set(data.filter(x=>x.activated).map(x=>x.snapshotCategory||'Unassigned'))].sort();e.innerHTML='<option value="">All categories / statuses</option><option value="review">Active: category is not IPGS</option><option value="pending">Not active in Snapshot</option>'+values.map(v=>`<option value="${esc(v)}">${esc(A.categoryLabel(v))} (${data.filter(x=>x.activated&&(x.snapshotCategory||'Unassigned')===v).length})</option>`).join('');e.value=[...e.options].some(o=>o.value===old)?old:'';summaries();renderPendingWorklist();renderReconciliation();let statusPanel=document.getElementById('continuationPanel');if(!statusPanel){statusPanel=document.createElement('div');statusPanel.id='continuationPanel';statusPanel.style.cssText='background:#fff;border:1px solid #dde4ed;border-radius:14px;padding:18px;margin:18px 0';const target=document.getElementById('recentSessions')?.closest('.panel')||document.getElementById('recentSessions')?.parentElement;if(target)target.parentElement.insertBefore(statusPanel,target);}if(statusPanel)statusPanel.innerHTML='<strong>Student Continuation</strong><div style="display:flex;gap:22px;flex-wrap:wrap;margin-top:12px"><span>Withdrawal requested: <b>'+data.filter(x=>x.continuation?.status==='Withdrawal Requested').length+'</b></span><span>Withdrawn (confirmed): <b>'+data.filter(x=>x.continuation?.status==='Withdrawn').length+'</b></span><span>Deferred: <b>'+data.filter(x=>x.continuation?.status==='Deferred').length+'</b></span></div><p class="small">Continuation records are independent from official ACC and Sky activation. Use Candidate Profile to save continuation status and remarks. ACC and Sky activation remain unchanged.</p>';renderRecentSessions();renderCalendar();renderCandidates();renderIntakes();renderTasks()}
 function modal(title,content){$("modalTitle").textContent=title;$("modalBody").innerHTML=content;$("modalbg").classList.add("show")}function closeModal(){$("modalbg").classList.remove("show")}document.getElementById("modalbg").onclick=e=>{if(e.target.id==="modalbg")closeModal()};
