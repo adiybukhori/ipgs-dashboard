@@ -57,23 +57,28 @@ function applyVerifiedMatches(parsed){
 
 function classifyAccActivationDiscrepancies(parsed){
  const candidates=parsed.candidates||[],details=parsed.pendingDetails||[],b=parsed.summary?.applicationBreakdown||{};
- const category='ACC Activated / Snapshot Not Matched';
- let n=0;
+ const review='ACC Activated / Snapshot Not Matched',inactive='ACC Activated / Confirmed Inactive';
+ let nReview=0,nInactive=0;
  for(const x of candidates){
   if(!x.accFound||x.activated||String(x.accSkyStatus||'').toUpperCase()!=='ACTIVATED'||!String(x.accMatric||'').trim())continue;
   const status=x.continuation?.status;
   if(['Withdrawal Requested','Withdrawn','Deferred','Not Qualified'].includes(status))continue;
+  const verifiedInactive=status==='Sky Inactive (Verified)';
+  const category=verifiedInactive?inactive:review;
+  const recorded=String(x.continuation?.reason||'').trim();
   x.processingCategory=category;
-  x.reconciliationRemark='ACC has Sky activation and matric; not found Active in the latest Snapshot. Verify Sky and snapshot sync before any re-activation.';
+  x.reconciliationRemark=recorded||(verifiedInactive?'Inactive status is awaiting a reason': 'ACC has Sky activation and matric but no Active record in the latest Snapshot. Verify Sky status before re-activation.');
   const d=details.find(z=>normId(z.ic)===normId(x.ic));
-  if(d){d.status=category;d.reason=d.reason||x.reconciliationRemark}
-  n++;
+  if(d){d.status=category;d.reason=recorded||x.reconciliationRemark}
+  if(verifiedInactive)nInactive++;else nReview++;
  }
  const old=Number(b['Pending Review / Activation']||0);
- if(n>old)throw Error('ACC activation reconciliation exceeds pending applicant count');
- b['Pending Review / Activation']=old-n;
- b[category]=(Number(b[category]||0))+n;
- parsed.summary.accActivatedNotInSnapshot=n;
+ if(nReview+nInactive>old)throw Error('ACC activation reconciliation exceeds pending applicant count');
+ b['Pending Review / Activation']=old-nReview-nInactive;
+ b[review]=(Number(b[review]||0))+nReview;
+ b[inactive]=(Number(b[inactive]||0))+nInactive;
+ parsed.summary.accActivatedNotInSnapshot=nReview+nInactive;
+ parsed.summary.accConfirmedInactive=nInactive;
  return parsed;
 }
 module.exports=async(req,res)=>{
