@@ -73,7 +73,8 @@ function reminderControl_(input){
   return {ok:true,ic:id,status,count:old.count,reason:old.reason};
  }finally{lock.releaseLock()}
 }
-function remindHtml_(optoutUrl){
+function remindHtml_(optoutUrl, reminderNumber){
+ const finalReminder=Number(reminderNumber)>=REMINDER_MAX_DAYS;
  const link=remindEsc_(optoutUrl),admission=remindEsc_(REMINDER_ADMISSION_URL);
  return '<!doctype html><html><body style="background:#f5f3f8;margin:0;padding:20px;font-family:Arial,Helvetica,sans-serif;color:#29223a">'
  +'<table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center"><table role="presentation" width="580" style="max-width:580px;width:100%;background:#fff;border-radius:12px;overflow:hidden">'
@@ -88,9 +89,12 @@ function remindHtml_(optoutUrl){
  +'<p style="text-align:center;margin:0 0 24px"><a href="'+admission+'" style="display:inline-block;padding:14px 27px;border-radius:7px;background:#5B2C83;color:white;font-weight:bold;text-decoration:none">Complete Admission Form</a></p>'
  +'<p style="font-size:14px;line-height:1.75;margin:0 0 20px">Already applied? No further action is needed. You may disregard this reminder.</p>'
  +'<p style="font-size:14px;line-height:1.75;margin:0">Should you require assistance, simply reply to this email.<br><b>IPGS Admissions Team</b><br>Innovative University College</p></td></tr>'
+ +(finalReminder
+  ? '<tr><td style="padding:8px 28px 22px;text-align:center"><p style="font-size:14px;color:#5B2C83"><strong>Final reminder</strong></p><p style="font-size:13px;color:#5B2C83">Not planning to apply? Let us know and we will stop contacting you.</p><p><a href="'+link+'" style="display:inline-block;background:#ede5f4;color:#5B2C83;border:1px solid #b7a2cb;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:bold">Not Interested — Stop Reminders</a></p></td></tr>'
+  : '')
  +'<tr><td style="border-top:1px solid #e8e2ef;padding:18px 28px 24px;text-align:center;background:#faf9fc">'
- +'<p style="font-size:12px;color:#6f6477;margin:0 0 10px">No longer interested? You can permanently stop admission reminder emails.</p>'
- +'<a href="'+link+'" style="font-size:13px;color:#5B2C83;text-decoration:underline">Not Interested — Stop Reminders</a>'
+ +'<p style="font-size:12px;color:#6f6477;margin:0 0 10px">You can opt out of future admission reminders at any time.</p>'
+ +'<a href="'+link+'" style="font-size:12px;color:#5B2C83;text-decoration:underline">Stop Reminder Emails</a>'
  +'<p style="font-size:11px;color:#9689a0;margin:18px 0 0">IPGS Registry · Innovative University College</p></td></tr>'
  +'</table></td></tr></table></body></html>';
 }
@@ -116,8 +120,8 @@ function reminderDailyJob(){
    const token=old.token||Utilities.getUuid().replace(/-/g,'')+Utilities.getUuid().replace(/-/g,'');
    const url=REMINDER_WEBAPP_URL+'?action=unsubscribe&token='+encodeURIComponent(token);
    const email={to:REMINDER_SENDER,bcc:row.email,subject:REMINDER_SUBJECT,
-     body:'Please complete the official admission form: '+REMINDER_ADMISSION_URL+'. If not interested, stop reminders: '+url,
-     htmlBody:remindHtml_(url),inlineImages:images,name:'IPGS Registry',replyTo:REMINDER_SENDER};
+     body:'Please complete the official admission form: '+REMINDER_ADMISSION_URL+'. To stop reminder emails at any time: '+url,
+     htmlBody:remindHtml_(url,old.count+1),inlineImages:images,name:'IPGS Registry',replyTo:REMINDER_SENDER};
    try{
     MailApp.sendEmail(email);
     old.ic=clean_(row.ic);old.name=row.name;old.email=row.email;old.status='ACTIVE';old.token=token;
