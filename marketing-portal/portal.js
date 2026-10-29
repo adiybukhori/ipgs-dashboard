@@ -91,12 +91,14 @@ function renderReminderRows(){
  const area=$('reminderRows');
  if(!area||!reminderData)return;
  const term=String($('reminderSearch')?.value||'').toUpperCase().replace(/\s+/g,' '),status=$('reminderFilter')?.value||'';
+ // This is a reminder worklist, not the university-wide ACC register.
+ // Never show already-applied, active, or possible ACC identity-match candidates.
  const entries=reminderData.candidates.map((x,i)=>({...x,index:i})).filter(x=>{
+  if(x.accFound||x.active||x.reason==='Possible ACC Match by Email — Verify ID')return false;
   if(term&&!((x.name+' '+x.ic+' '+x.email).toUpperCase().includes(term)))return false;
   if(status==='ELIGIBLE')return x.eligible;
   if(status==='PAUSED'||status==='NOT_INTERESTED')return x.reminderStatus===status;
-  if(status==='APPLIED')return x.reason==='Applied in ACC';
-  if(status==='BLOCKED')return !x.eligible;
+  if(status==='BLOCKED')return !x.eligible&&x.reminderStatus!=='PAUSED'&&x.reminderStatus!=='NOT_INTERESTED';
   return true;
  });
  entries.sort((a,b)=>(a.eligible===b.eligible?0:a.eligible?-1:1)||a.name.localeCompare(b.name));
@@ -105,8 +107,9 @@ function renderReminderRows(){
   const badge=isOptOut?'Not Interested · STOP':paused?'Stopped by Admin':x.eligible?'Eligible · 9 AM':blocked||'Waiting';
   const controls=isOptOut?'<span class="small">Opted out — no reminders</span>':
    paused?'<button class="btn" onclick="updateReminderControl(\'RESUME\','+x.index+')">Resume</button>':
-   '<button class="btn" onclick="updateReminderControl(\'STOP\','+x.index+')">Stop Reminder</button>'
-     +(!x.accFound&&!x.active?'<button class="btn soft" onclick="updateReminderControl(\'NOT_INTERESTED\','+x.index+')">Not Interested</button>':'');
+   x.eligible?'<button class="btn" onclick="updateReminderControl(\'STOP\','+x.index+')">Stop Reminder</button>'+
+     '<button class="btn soft" onclick="updateReminderControl(\'NOT_INTERESTED\','+x.index+')">Not Interested</button>':
+   '<span class="small">Excluded — no reminder will be sent</span>';
   return '<tr><td><strong>'+esc(x.name)+'</strong><div class="small">'+esc(x.email||'No email')+'</div></td>'
    +'<td>'+esc(x.programme)+'</td><td><strong>'+Number(x.count||0)+'</strong></td>'
    +'<td>'+esc(x.lastSentAt?A.formatDate(x.lastSentAt):'Not sent')+'</td>'
