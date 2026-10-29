@@ -143,7 +143,7 @@ function renderPendingWorklist(){
    const st=x.continuation?.status||'Not Set',reason=x.continuation?.reason||'';
    const values=[...new Set([st,'Sky Status Verification','Sky Inactive (Verified)','Snapshot Sync Pending','Reactivation Pending'])];
    const select=values.map(z=>'<option value="'+esc(z)+'" '+(st===z?'selected':'')+'>'+esc(z)+'</option>').join('');
-   return '<tr><td><strong>'+esc(x.name)+'</strong><div class="muted">ACC Matric: '+esc(x.accMatric||'Not recorded')+'</div></td><td><span class="tag '+(st==='Sky Inactive (Verified)'?'amber':'blue')+'">'+esc(st==='Not Set'?'Not verified':st)+'</span></td><td class="discrepancy-remark">'+(reason?esc(reason):'<span class="muted">No remark saved — review required</span>')+'</td><td><button class="btn soft" type="button" onclick="openDiscrepancyEditor(event,\''+esc(x.id)+'\')">Edit Status &amp; Remark</button></td></tr>'
+   return '<tr><td><strong>'+esc(x.name)+'</strong><div class="muted">ACC Matric: '+esc(x.accMatric||'Not recorded')+'</div></td><td><span class="tag '+(st==='Sky Inactive (Verified)'?'amber':'blue')+'">'+esc(st==='Not Set'?'Not verified':st)+'</span></td><td class="discrepancy-remark">'+(reason?esc(reason):'<span class="muted">No remark saved — review required</span>')+(latestDiscrepancySave?.ok&&latestDiscrepancySave.id===x.id?'<div class="recon-inline-saved">✓ Saved and verified</div>':'')+'</td><td><button class="btn soft" type="button" onclick="openDiscrepancyEditor(event,\''+esc(x.id)+'\')">Edit Status &amp; Remark</button></td></tr>'
    +'<tr class="discrepancy-editor" hidden><td colspan="4"><form onsubmit="saveDiscrepancy(event,\''+esc(x.id)+'\')"><div class="discrepancy-fields"><label>Sky status (verified)<select name="status" required>'+select+'</select></label><label>Remark / reason (required)<textarea name="reason" rows="2" maxlength="2000" required placeholder="E.g. Verified in Sky on [date]: student is Inactive. Reason: ...">'+esc(reason)+'</textarea></label><button class="btn primary" type="submit">Save &amp; Verify</button></div><p class="small discrepancy-editor-feedback" role="status">Tracks Sky status reported by staff; does not modify Sky or ACC.</p></form></td></tr>';
  }).join('')+'</tbody></table></div></details>'
  +'<details><summary>View non-active cases with recorded decisions ('+alreadyFlagged.length+')</summary><div class="recon-tablewrap"><table><thead><tr><th>Student</th><th>Decision</th><th>Remark</th></tr></thead><tbody>'+alreadyFlagged.map(x=>'<tr data-candidate="'+esc(x.id)+'"><td>'+esc(x.name)+'</td><td>'+esc(x.continuation.status)+'</td><td>'+esc(x.continuation.reason||'Not recorded')+'</td></tr>').join('')+'</tbody></table></div></details>';
@@ -173,7 +173,7 @@ async function saveDiscrepancy(e,id){
   const stored=data.find(v=>v.ic===x.ic)?.continuation;
   if(!refreshed||stored?.status!==status||String(stored.reason||'').trim()!==reason){
    latestDiscrepancySave={ok:false,message:'Save request accepted, but live read-back could not confirm the change for '+x.name+'. Check connection or refresh.'};
-  }else latestDiscrepancySave={ok:true,message:'Saved and verified: '+x.name+' — '+status+'. Remark is now visible in the ACC Activated worklist.'};
+  }else latestDiscrepancySave={ok:true,id:x.id,message:'Saved and verified: '+x.name+' — '+status+'. Remark is now visible in the ACC Activated worklist.'};
   renderPendingWorklist();
  }catch(err){message.textContent='Not saved: '+String(err.message||err);message.classList.add('error');}
  finally{button.disabled=false}
