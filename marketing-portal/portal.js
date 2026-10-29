@@ -114,7 +114,7 @@ function renderReconciliation(){
  let panel=document.getElementById('ipgsReconciliation');
  if(!panel){
   panel=document.createElement('section');panel.id='ipgsReconciliation';panel.className='ipgs-reconciliation';
-  const point=document.getElementById('recentSessions'),host=point?.closest('section')||point?.parentElement;
+  const point=document.getElementById('recentSessions'),host=point?.closest('.panel')||point?.parentElement;
   if(host?.parentElement)host.parentElement.insertBefore(panel,host);
  }
  if(!panel)return;
