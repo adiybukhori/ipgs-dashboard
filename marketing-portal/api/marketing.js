@@ -57,27 +57,29 @@ function applyVerifiedMatches(parsed){
 
 function classifyAccActivationDiscrepancies(parsed){
  const candidates=parsed.candidates||[],details=parsed.pendingDetails||[],b=parsed.summary?.applicationBreakdown||{};
- const review='ACC Activated / Snapshot Not Matched',inactive='ACC Activated / Confirmed Inactive';
- let nReview=0,nInactive=0;
+ const review='ACC Activated / Snapshot Not Matched',inactive='ACC Activated / Confirmed Inactive',suspended='ACC Activated / Suspended';
+ let nReview=0,nInactive=0,nSuspended=0;
  for(const x of candidates){
   if(!x.accFound||x.activated||String(x.accSkyStatus||'').toUpperCase()!=='ACTIVATED'||!String(x.accMatric||'').trim())continue;
   const status=x.continuation?.status;
   if(['Withdrawal Requested','Withdrawn','Deferred','Not Qualified'].includes(status))continue;
-  const verifiedInactive=status==='Sky Inactive (Verified)';
-  const category=verifiedInactive?inactive:review;
+  const verifiedInactive=status==='Sky Inactive (Verified)',verifiedSuspended=status==='Sky Suspended (Verified)';
+  const category=verifiedInactive?inactive:verifiedSuspended?suspended:review;
   const recorded=String(x.continuation?.reason||'').trim();
   x.processingCategory=category;
   x.reconciliationRemark=recorded||(verifiedInactive?'Inactive status is awaiting a reason': 'ACC has Sky activation and matric but no Active record in the latest Snapshot. Verify Sky status before re-activation.');
   const d=details.find(z=>normId(z.ic)===normId(x.ic));
   if(d){d.status=category;d.reason=recorded||x.reconciliationRemark}
-  if(verifiedInactive)nInactive++;else nReview++;
+  if(verifiedInactive)nInactive++;else if(verifiedSuspended)nSuspended++;else nReview++;
  }
  const old=Number(b['Pending Review / Activation']||0);
- if(nReview+nInactive>old)throw Error('ACC activation reconciliation exceeds pending applicant count');
- b['Pending Review / Activation']=old-nReview-nInactive;
+ if(nReview+nInactive+nSuspended>old)throw Error('ACC activation reconciliation exceeds pending applicant count');
+ b['Pending Review / Activation']=old-nReview-nInactive-nSuspended;
  b[review]=(Number(b[review]||0))+nReview;
  b[inactive]=(Number(b[inactive]||0))+nInactive;
- parsed.summary.accActivatedNotInSnapshot=nReview+nInactive;
+ b[suspended]=(Number(b[suspended]||0))+nSuspended;
+ parsed.summary.accActivatedNotInSnapshot=nReview+nInactive+nSuspended;
+ parsed.summary.accSuspended=nSuspended;
  parsed.summary.accConfirmedInactive=nInactive;
  return parsed;
 }
