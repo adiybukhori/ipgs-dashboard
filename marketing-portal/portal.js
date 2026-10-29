@@ -107,9 +107,8 @@ function renderReminderRows(){
   const badge=isOptOut?'Not Interested · STOP':paused?'Stopped by Admin':x.eligible?'Eligible · 9 AM':blocked||'Waiting';
   const controls=isOptOut?'<span class="small">Opted out — no reminders</span>':
    paused?'<button class="btn" onclick="updateReminderControl(\'RESUME\','+x.index+')">Resume</button>':
-   x.eligible?'<button class="btn" onclick="updateReminderControl(\'STOP\','+x.index+')">Stop Reminder</button>'+
-     '<button class="btn soft" onclick="updateReminderControl(\'NOT_INTERESTED\','+x.index+')">Not Interested</button>':
-   '<span class="small">Excluded — no reminder will be sent</span>';
+   '<button class="btn" onclick="updateReminderControl(\'STOP\','+x.index+')">Stop Reminder</button>'+
+     '<button class="btn soft" onclick="updateReminderControl(\'NOT_INTERESTED\','+x.index+')">Not Interested</button>';
   return '<tr><td><strong>'+esc(x.name)+'</strong><div class="small">'+esc(x.email||'No email')+'</div></td>'
    +'<td>'+esc(x.programme)+'</td><td><strong>'+Number(x.count||0)+'</strong></td>'
    +'<td>'+esc(x.lastSentAt?A.formatDate(x.lastSentAt):'Not sent')+'</td>'
