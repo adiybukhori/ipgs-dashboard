@@ -129,10 +129,10 @@ function doPost(e){
 function doGet(){return reply_({ok:false,error:'Use authenticated POST'})}
 
 function updateContinuation_(input){
- const allowed=['Not Set','Continuing','Pending Follow-up','Withdrawal Requested','Withdrawn','Deferred','Not Qualified'];
+ const allowed=['Not Set','Pending Screening','Documents Incomplete','Pending Follow-up','Qualified - Pending Activation','Sky Activation Verification','Continuing','Withdrawal Requested','Withdrawn','Deferred','Not Qualified'];
  const id=clean_(input.ic),status=String(input.status||''),reason=String(input.reason||'').trim();
  if(!id||id.length>40||!allowed.includes(status)||reason.length>2000)throw Error('Invalid continuation update');
- if(['Withdrawal Requested','Withdrawn','Deferred','Not Qualified'].includes(status)&&!reason)throw Error('A remark is required');
+ if(['Pending Screening','Documents Incomplete','Qualified - Pending Activation','Sky Activation Verification','Withdrawal Requested','Withdrawn','Deferred','Not Qualified'].includes(status)&&!reason)throw Error('A remark is required');
  const sheet=SpreadsheetApp.openById(SOURCES.marketing).getSheetByName('MARKETING_CONTINUATION_STATUS');
  if(!sheet)throw Error('Continuation status sheet missing');
  const last=sheet.getLastRow(),existing=last>1?sheet.getRange(2,1,last-1,2).getDisplayValues():[];
