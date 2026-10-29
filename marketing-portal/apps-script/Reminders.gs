@@ -126,6 +126,31 @@ function remindImages_(){
  if(!iuc||!ipgs)throw Error('Approved IUC/IPGS inline logo IDs are not configured');
  return {iucLogo:DriveApp.getFileById(iuc).getBlob().setName('iuc.png'),ipgsLogo:DriveApp.getFileById(ipgs).getBlob().setName('ipgs.png')};
 }
+/**
+ * Independent, fresh ACC exclusion gate. Fail closed if the ACC sheet
+ * cannot be read, and refresh if an application is added during the batch.
+ * This is separate from the portal's potentially older marketing snapshot.
+ */
+function reminderAccGuard_(){
+ const sh=SpreadsheetApp.openById(SOURCES.acc).getSheetByName('V2_APPLICATIONS');
+ if(!sh)throw Error('ACC applications source unavailable. No reminder can be sent');
+ let lastRow=-1,ids=new Set(),emails=new Set();
+ function refresh(){
+  const end=sh.getLastRow();
+  if(end===lastRow)return;
+  const values=end>=2?sh.getRange(2,5,end-1,2).getDisplayValues():[];
+  const nextIds=new Set(),nextEmails=new Set();
+  values.forEach(r=>{const id=clean_(r[0]);if(id)nextIds.add(id);const mail=String(r[1]||'').trim().toLowerCase();if(mail)nextEmails.add(mail)});
+  ids=nextIds;emails=nextEmails;lastRow=end;
+ }
+ refresh();
+ return {
+  alreadyApplied(c){
+   refresh(); // Catch applications appended after the daily queue was built.
+   return ids.has(clean_(c.ic))||emails.has(String(c.email||'').trim().toLowerCase());
+  }
+ };
+}
 function reminderDailyJob(){
  const prop=PropertiesService.getScriptProperties();
  if(prop.getProperty('IPGS_REMINDERS_ENABLED')!=='true')return {ok:true,mode:'PAUSED',sent:0};
@@ -134,12 +159,12 @@ function reminderDailyJob(){
  const lock=LockService.getScriptLock();if(!lock.tryLock(2000))return {ok:false,error:'Another reminder job is in progress'};
  let sent=0,failed=0;
  try{
-  const list=reminderList_(),sheet=remindMap_().sheet,images=remindImages_();
+  const list=reminderList_(),accGuard=reminderAccGuard_(),images=remindImages_();
   if(MailApp.getRemainingDailyQuota()<list.summary.eligible)throw Error('Insufficient mail quota; no messages were sent');
   for(const row of list.candidates.filter(x=>x.eligible).slice(0,150)){
    const z=remindMap_(),old=z.map.get(clean_(row.ic))||{ic:row.ic,name:row.name,email:row.email,count:0,status:'ACTIVE'};
    // Re-check status immediately before each send; protects manual Stop actions.
-   if(old.status!=='ACTIVE')continue;
+   if(old.status!=='ACTIVE'||accGuard.alreadyApplied(row))continue; // ACC always wins over stale Marketing data.
    const token=old.token||Utilities.getUuid().replace(/-/g,'')+Utilities.getUuid().replace(/-/g,'');
    const url=REMINDER_WEBAPP_URL+'?action=unsubscribe&token='+encodeURIComponent(token);
    const email={to:REMINDER_SENDER,bcc:row.email,subject:REMINDER_SUBJECT,
