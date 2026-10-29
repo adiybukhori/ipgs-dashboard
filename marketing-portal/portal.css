@@ -69,3 +69,5 @@
 .recon-save-result.saved{background:#e8f6ef;color:#1b7757;border:1px solid #b7e4ce}
 .recon-save-result.error{background:#fff4e7;color:#956000;border:1px solid #f2d4ab}
 @media(max-width:850px){.ipgs-pending-worklist .discrepancy-fields{grid-template-columns:1fr;}}
+
+.ipgs-pending-worklist .recon-inline-saved{font-size:11px;color:#187554;font-weight:700;margin-top:5px}
