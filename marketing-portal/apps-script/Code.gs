@@ -135,6 +135,7 @@ function doPost(e){
  const expected=PropertiesService.getScriptProperties().getProperty('BRIDGE_SHARED_SECRET');
  if(!expected||input.key!==expected)return reply_({ok:false,error:'Unauthorized'});
  if(input.action==='updateContinuation')return reply_(updateContinuation_(input));
+ if(input.action==='reminderStatus')return reply_(reminderStatus_());
  if(input.action==='reminderList')return reply_(reminderList_(input));
  if(input.action==='reminderControl')return reply_(reminderControl_(input));
  if(input.action!=='reconcile')return reply_({ok:false,error:'Unsupported action'});
