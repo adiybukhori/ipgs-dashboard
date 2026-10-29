@@ -12,9 +12,78 @@ const accActivatedSnapshotReviews=()=>data.filter(x=>x.accFound&&!x.activated&&[
 const pendingAdmissionCandidates=()=>data.filter(x=>x.accFound&&!x.activated&&!x.processingCategory&&!TERMINAL_ADMISSION_STATUSES.has(x.continuation?.status));
 const stages={interested:"Not Applied",applied:"Applied in ACC",activated:"Activated"};
 function chip(s){return `<span class="tag ${s==="activated"?"green":s==="applied"?"blue":"amber"}">${stages[s]||esc(s)}</span>`}
-function navigate(page){document.querySelectorAll('.section').forEach(s=>s.classList.toggle('active',s.id===page));document.querySelectorAll('.nav').forEach(b=>b.classList.toggle('active',b.dataset.page===page));$('crumb').textContent=({dashboard:"Overview",preview:"Preview Calendar",candidates:"Candidate Pipeline",intakes:"Programme & Intake",followups:"Follow-up Tasks",sources:"Data Connections",team:"Team Management"})[page];$('mobileNav').hidden=true;render();window.scrollTo(0,0)}
+function navigate(page){document.querySelectorAll('.section').forEach(s=>s.classList.toggle('active',s.id===page));document.querySelectorAll('.nav').forEach(b=>b.classList.toggle('active',b.dataset.page===page));$('crumb').textContent=({dashboard:"Overview",preview:"Preview Calendar",candidates:"Candidate Pipeline",intakes:"Programme & Intake",followups:"Follow-up Tasks",sources:"Data Connections",team:"Team Management",reminders:"Admission Reminders"})[page];$('mobileNav').hidden=true;render();if(page==='reminders')loadReminderCenter(false);window.scrollTo(0,0)}
 document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>navigate(b.dataset.page));
 
+let reminderData=null,reminderLoading=false;
+async function loadReminderCenter(force){
+ if(reminderLoading||(!force&&reminderData))return;
+ reminderLoading=true;
+ const state=$('reminderInfo');
+ if(state)state.textContent='Reading the admission reminder register…';
+ try{
+  const response=await fetch('/api/reminders',{cache:'no-store',credentials:'same-origin'});
+  const result=await response.json();
+  if(!response.ok||!result.ok)throw Error(result.error||'Cannot read reminder register');
+  reminderData=result;
+  const t=result.summary||{};
+  $('remEligible').textContent=t.eligible??0;
+  $('remSent').textContent=t.totalSends??0;
+  $('remPaused').textContent=t.stopped??0;
+  $('remNotInterested').textContent=t.notInterested??0;
+  $('reminderMode').textContent=t.mode==='ACTIVE'?'Scheduled sending: ACTIVE · daily around 9:00 AM MYT':'Scheduled sending: PAUSED · no bulk emails will be sent';
+  $('reminderInfo').textContent='Reminder limit: '+(t.maxPerCandidate||7)+' per candidate · Sender requirement: ipgs.admission@innovative.edu.my · '+t.eligible+' currently eligible · '+t.accCompleted+' already applied in ACC (automatically excluded).';
+  renderReminderRows();
+ }catch(err){
+  if(state)state.textContent='Reminder register unavailable: '+String(err.message||err)+'. No emails were sent.';
+ }finally{reminderLoading=false}
+}
+function renderReminderRows(){
+ const area=$('reminderRows');
+ if(!area||!reminderData)return;
+ const term=String($('reminderSearch')?.value||'').toUpperCase().replace(/\s+/g,' '),status=$('reminderFilter')?.value||'';
+ const entries=reminderData.candidates.map((x,i)=>({...x,index:i})).filter(x=>{
+  if(term&&!((x.name+' '+x.ic+' '+x.email).toUpperCase().includes(term)))return false;
+  if(status==='ELIGIBLE')return x.eligible;
+  if(status==='PAUSED'||status==='NOT_INTERESTED')return x.reminderStatus===status;
+  if(status==='APPLIED')return x.reason==='Applied in ACC';
+  if(status==='BLOCKED')return !x.eligible;
+  return true;
+ });
+ entries.sort((a,b)=>(a.eligible===b.eligible?0:a.eligible?-1:1)||a.name.localeCompare(b.name));
+ area.innerHTML=entries.slice(0,350).map(x=>{
+  const blocked=x.reason||'',isOptOut=x.reminderStatus==='NOT_INTERESTED',paused=x.reminderStatus==='PAUSED';
+  const badge=isOptOut?'Not Interested · STOP':paused?'Stopped by Admin':x.eligible?'Eligible · 9 AM':blocked||'Waiting';
+  const controls=isOptOut?'<span class="small">Opted out — no reminders</span>':
+   paused?'<button class="btn" onclick="updateReminderControl(\'RESUME\','+x.index+')">Resume</button>':
+   '<button class="btn" onclick="updateReminderControl(\'STOP\','+x.index+')">Stop Reminder</button>'
+     +(!x.accFound&&!x.active?'<button class="btn soft" onclick="updateReminderControl(\'NOT_INTERESTED\','+x.index+')">Not Interested</button>':'');
+  return '<tr><td><strong>'+esc(x.name)+'</strong><div class="small">'+esc(x.email||'No email')+'</div></td>'
+   +'<td>'+esc(x.programme)+'</td><td><strong>'+Number(x.count||0)+'</strong></td>'
+   +'<td>'+esc(x.lastSentAt?A.formatDate(x.lastSentAt):'Not sent')+'</td>'
+   +'<td><span class="tag '+(isOptOut?'amber':paused?'gray':x.eligible?'green':'blue')+'">'+esc(badge)+'</span></td>'
+   +'<td><div class="buttons">'+controls+'</div></td></tr>';
+ }).join('')||'<tr><td colspan="6" class="empty">No candidates match the selected filters.</td></tr>';
+}
+async function updateReminderControl(command,index){
+ if(!reminderData||reminderLoading)return;
+ const x=reminderData.candidates[index];
+ if(!x)return;
+ const msg=command==='NOT_INTERESTED'?'Mark '+x.name+' as Not Interested and permanently stop reminders?':
+   command==='STOP'?'Stop future reminder emails for '+x.name+'?':
+   'Resume reminders for '+x.name+'?';
+ if(!confirm(msg))return;
+ const reason=command==='STOP'?'Stopped manually by Marketing staff':
+   command==='NOT_INTERESTED'?'Recorded as Not Interested by Marketing staff':'Reminders resumed by Marketing staff';
+ reminderLoading=true;
+ try{
+  const r=await fetch('/api/reminders',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({ic:x.ic,command,reason})});
+  const v=await r.json();
+  if(!r.ok||!v.ok)throw Error(v.error||'Update failed');
+  reminderData=null;reminderLoading=false;
+  await loadReminderCenter(true);
+ }catch(err){reminderLoading=false;alert('Reminder status not saved: '+String(err.message||err))}
+}
 function summaryBreakdown(){
  const v=window.ipgsSummary;
  if(!v||!Number.isFinite(v.internalTotalActive)||!v.applicationBreakdown)return null;
