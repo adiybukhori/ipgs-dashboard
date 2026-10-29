@@ -4,9 +4,9 @@ module.exports=async(req,res)=>{
  if(req.method!=='POST')return res.status(405).end();
  if(!ok(req))return res.status(401).json({error:'Sign-in required'});
  const b=req.body||{};
- const allowed=['Not Set','Pending Screening','Documents Incomplete','Pending Follow-up','Qualified - Pending Activation','Sky Activation Verification','Continuing','Withdrawal Requested','Withdrawn','Deferred','Not Qualified'];
+ const allowed=['Not Set','Pending Screening','Documents Incomplete','Pending Follow-up','Qualified - Pending Activation','Sky Activation Verification','Sky Inactive (Verified)','Snapshot Sync Pending','Reactivation Pending','Continuing','Withdrawal Requested','Withdrawn','Deferred','Not Qualified'];
  if(typeof b.ic!=='string'||!b.ic.trim()||!allowed.includes(b.status)||typeof b.reason!=='string'||b.reason.length>2000)return res.status(400).json({error:'Invalid status, IC or remarks'});
- if(['Pending Screening','Documents Incomplete','Qualified - Pending Activation','Sky Activation Verification','Withdrawal Requested','Withdrawn','Deferred','Not Qualified'].includes(b.status)&&!b.reason.trim())return res.status(400).json({error:'Remarks required'});
+ if(['Pending Screening','Documents Incomplete','Qualified - Pending Activation','Sky Activation Verification','Sky Inactive (Verified)','Snapshot Sync Pending','Reactivation Pending','Withdrawal Requested','Withdrawn','Deferred','Not Qualified'].includes(b.status)&&!b.reason.trim())return res.status(400).json({error:'Remarks required'});
  if(!process.env.MARKETING_BRIDGE_URL||!process.env.MARKETING_BRIDGE_SECRET)return res.status(503).json({error:'Bridge not configured'});
  try {
   const c=new AbortController(),t=setTimeout(()=>c.abort(),25000);let r;
