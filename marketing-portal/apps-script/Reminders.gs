@@ -9,7 +9,7 @@ const REMINDER_SENDER='ipgs.admission@innovative.edu.my';
 const REMINDER_SUBJECT='Reminder: Complete Your IPGS Admission Application';
 const REMINDER_ADMISSION_URL='https://ipgs-admission-form.innovative.edu.my/';
 const REMINDER_WEBAPP_URL='https://script.google.com/macros/s/AKfycbzFYrErPfVt-5ul0WfL9GmQAP0zVLxSkvgGLlQN_ZtR3uDw_LWqJmj874QOkvxueRC_/exec';
-const REMINDER_MAX_DAYS=7;
+const REMINDER_OPT_OUT_CTA_FROM=7; // Prominent Not Interested button appears in reminder 7 and every later reminder.
 function remindSafe_(s){return String(s==null?'':s).replace(/^[=+@-]/,"'$&").slice(0,2500)}
 function remindEsc_(s){return String(s||'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function remindSheet_(name){const sh=SpreadsheetApp.openById(SOURCES.marketing).getSheetByName(name);if(!sh)throw Error('Missing reminder sheet '+name);return sh}
@@ -41,8 +41,8 @@ function reminderList_(input){
   const v=map.get(clean_(c.ic)),blocked=remindBlocked_(c),em=String(c.email||'').trim().toLowerCase();
   const status=v?v.status:'ACTIVE',duplicate=emailCounts.get(em)>1;
   const due=v&&v.last&&new Date(v.last).toLocaleDateString('en-CA',{timeZone:'Asia/Kuala_Lumpur'})===new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Kuala_Lumpur'})?'Already Sent Today':'';
-  const eligible=!blocked&&!duplicate&&status==='ACTIVE'&&(!v||v.count<REMINDER_MAX_DAYS)&&!due;
-  const why=blocked||(duplicate?'Duplicate Email — Review':status==='NOT_INTERESTED'?'Not Interested':status==='PAUSED'?'Stopped by Admin':v&&v.count>=REMINDER_MAX_DAYS?'Reminder Limit Reached':due);
+  const eligible=!blocked&&!duplicate&&status==='ACTIVE'&&!due;
+  const why=blocked||(duplicate?'Duplicate Email — Review':status==='NOT_INTERESTED'?'Not Interested':status==='PAUSED'?'Stopped by Admin':due);
   return {ic:c.ic,name:c.name,email:c.email,programme:c.programme,registeredAt:c.registeredAt,
    accFound:c.accFound,active:c.activated,reminderStatus:status,count:v?v.count:0,lastSentAt:v?v.last:'',nextDueAt:v?v.next:'',
    eligible,reason:why||'',stateUpdatedAt:v?v.updated:''};
@@ -53,7 +53,7 @@ function reminderList_(input){
   accCompleted:source.candidates.filter(x=>x.accFound).length,appliedAfterReminder:list.filter(x=>x.accFound&&x.count>0).length,
   active:source.candidates.filter(x=>x.activated).length,
   mode:PropertiesService.getScriptProperties().getProperty('IPGS_REMINDERS_ENABLED')==='true'?'ACTIVE':'PAUSED',
-  schedule:'Every day around 09:00 Asia/Kuala_Lumpur',maxPerCandidate:REMINDER_MAX_DAYS,
+  schedule:'Every day around 09:00 Asia/Kuala_Lumpur',optOutCTAFrom:REMINDER_OPT_OUT_CTA_FROM,stopMode:'Until ACC, opt-out or admin Stop',
   sender:Session.getEffectiveUser().getEmail()||'unavailable'};
  return {ok:true,summary:totals,candidates:list};
 }
@@ -74,7 +74,7 @@ function reminderControl_(input){
  }finally{lock.releaseLock()}
 }
 function remindHtml_(optoutUrl, reminderNumber){
- const finalReminder=Number(reminderNumber)>=REMINDER_MAX_DAYS;
+ const showNotInterestedButton=Number(reminderNumber)>=REMINDER_OPT_OUT_CTA_FROM;
  const link=remindEsc_(optoutUrl),admission=remindEsc_(REMINDER_ADMISSION_URL);
  return '<!doctype html><html><body style="background:#f5f3f8;margin:0;padding:20px;font-family:Arial,Helvetica,sans-serif;color:#29223a">'
  +'<table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center"><table role="presentation" width="580" style="max-width:580px;width:100%;background:#fff;border-radius:12px;overflow:hidden">'
@@ -89,8 +89,8 @@ function remindHtml_(optoutUrl, reminderNumber){
  +'<p style="text-align:center;margin:0 0 24px"><a href="'+admission+'" style="display:inline-block;padding:14px 27px;border-radius:7px;background:#5B2C83;color:white;font-weight:bold;text-decoration:none">Complete Admission Form</a></p>'
  +'<p style="font-size:14px;line-height:1.75;margin:0 0 20px">Already applied? No further action is needed. You may disregard this reminder.</p>'
  +'<p style="font-size:14px;line-height:1.75;margin:0">Should you require assistance, simply reply to this email.<br><b>IPGS Admissions Team</b><br>Innovative University College</p></td></tr>'
- +(finalReminder
-  ? '<tr><td style="padding:8px 28px 22px;text-align:center"><p style="font-size:14px;color:#5B2C83"><strong>Final reminder</strong></p><p style="font-size:13px;color:#5B2C83">Not planning to apply? Let us know and we will stop contacting you.</p><p><a href="'+link+'" style="display:inline-block;background:#ede5f4;color:#5B2C83;border:1px solid #b7a2cb;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:bold">Not Interested — Stop Reminders</a></p></td></tr>'
+ +(showNotInterestedButton
+  ? '<tr><td style="padding:8px 28px 22px;text-align:center"><p style="font-size:14px;color:#5B2C83"><strong>Admission Reminder</strong></p><p style="font-size:13px;color:#5B2C83">Not planning to apply? Let us know and we will stop contacting you.</p><p><a href="'+link+'" style="display:inline-block;background:#ede5f4;color:#5B2C83;border:1px solid #b7a2cb;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:bold">Not Interested — Stop Reminders</a></p></td></tr>'
   : '')
  +'<tr><td style="border-top:1px solid #e8e2ef;padding:18px 28px 24px;text-align:center;background:#faf9fc">'
  +'<p style="font-size:12px;color:#6f6477;margin:0 0 10px">You can opt out of future admission reminders at any time.</p>'
@@ -116,7 +116,7 @@ function reminderDailyJob(){
   for(const row of list.candidates.filter(x=>x.eligible).slice(0,150)){
    const z=remindMap_(),old=z.map.get(clean_(row.ic))||{ic:row.ic,name:row.name,email:row.email,count:0,status:'ACTIVE'};
    // Re-check status immediately before each send; protects manual Stop actions.
-   if(old.status!=='ACTIVE'||old.count>=REMINDER_MAX_DAYS)continue;
+   if(old.status!=='ACTIVE')continue;
    const token=old.token||Utilities.getUuid().replace(/-/g,'')+Utilities.getUuid().replace(/-/g,'');
    const url=REMINDER_WEBAPP_URL+'?action=unsubscribe&token='+encodeURIComponent(token);
    const email={to:REMINDER_SENDER,bcc:row.email,subject:REMINDER_SUBJECT,
