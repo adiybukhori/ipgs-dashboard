@@ -32,7 +32,7 @@ async function loadReminderCenter(force){
   $('remPaused').textContent=t.stopped??0;
   $('remNotInterested').textContent=t.notInterested??0;
   $('reminderMode').textContent=t.mode==='ACTIVE'?'Scheduled sending: ACTIVE · daily around 9:00 AM MYT':'Scheduled sending: PAUSED · no bulk emails will be sent';
-  $('reminderInfo').textContent='Reminder limit: '+(t.maxPerCandidate||7)+' per candidate · Sender requirement: ipgs.admission@innovative.edu.my · '+t.eligible+' currently eligible · '+t.accCompleted+' already applied in ACC (automatically excluded).';
+  $('reminderInfo').textContent='Daily 9:00 AM reminders continue until candidate opts out, admin stops, or ACC is submitted. The prominent Not Interested button appears from reminder '+(t.optOutCTAFrom||7)+' onward. Sender: ipgs.admission@innovative.edu.my · '+t.eligible+' currently eligible · '+t.accCompleted+' already applied (excluded).';
   renderReminderRows();
  }catch(err){
   if(state)state.textContent='Reminder register unavailable: '+String(err.message||err)+'. No emails were sent.';
