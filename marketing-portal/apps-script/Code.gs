@@ -129,15 +129,22 @@ function build_(){
 }
 function doPost(e){
  try{
+ // Token-protected public opt-out: requires a deliberate POST after confirmation.
+ if(e&&e.parameter&&e.parameter.action==='unsubscribeConfirm')return reminderStopPublic_(e);
  const input=JSON.parse(e&&e.postData&&e.postData.contents||'{}');
  const expected=PropertiesService.getScriptProperties().getProperty('BRIDGE_SHARED_SECRET');
  if(!expected||input.key!==expected)return reply_({ok:false,error:'Unauthorized'});
  if(input.action==='updateContinuation')return reply_(updateContinuation_(input));
+ if(input.action==='reminderList')return reply_(reminderList_(input));
+ if(input.action==='reminderControl')return reply_(reminderControl_(input));
  if(input.action!=='reconcile')return reply_({ok:false,error:'Unsupported action'});
  return reply_(build_());
  }catch(ex){return reply_({ok:false,error:String(ex.message||ex).slice(0,180)})}
 }
-function doGet(){return reply_({ok:false,error:'Use authenticated POST'})}
+function doGet(e){
+ if(e&&e.parameter&&e.parameter.action==='unsubscribe')return reminderStopPage_(e);
+ return reply_({ok:false,error:'Use authenticated POST'});
+}
 
 function updateContinuation_(input){
  const allowed=['Not Set','Pending Screening','Documents Incomplete','Pending Follow-up','Qualified - Pending Activation','Sky Activation Verification','Sky Inactive (Verified)','Sky Suspended (Verified)','Snapshot Sync Pending','Reactivation Pending','Continuing','Withdrawal Requested','Withdrawn','Deferred','Not Qualified'];
