@@ -1,4 +1,4 @@
-/* Exact HTML email template sourced from apps-script/Reminders.gs.
+/* Exact HTML email template sourced from deployed IPGS-Marketing-Bridge Reminders.js (v15).
    Regenerate this preview function when email template changes. No email is sent here. */
 (function(){
   'use strict';
@@ -10,10 +10,7 @@ function remindHtml_(optoutUrl, reminderNumber){
  const link=remindEsc_(optoutUrl),admission=remindEsc_(REMINDER_ADMISSION_URL);
  return '<!doctype html><html><body style="background:#f5f3f8;margin:0;padding:20px;font-family:Arial,Helvetica,sans-serif;color:#29223a">'
  +'<table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center"><table role="presentation" width="580" style="max-width:580px;width:100%;background:#fff;border-radius:12px;overflow:hidden">'
- +'<tr><td style="background:#5B2C83;padding:20px 28px;border-bottom:5px solid #C5A55A"><table role="presentation" width="100%"><tr>'
- +'<td width="50%" align="left"><img src="cid:iucLogo" alt="Innovative University College" width="165" style="max-width:100%;height:auto"></td>'
- +'<td width="50%" align="right"><img src="cid:ipgsLogo" alt="IPGS" width="140" style="max-width:100%;height:auto"></td>'
- +'</tr></table></td></tr>'
+ +'<tr><td style="padding:0"><img src="https://raw.githubusercontent.com/adiybukhori/ipgs-admission-form/main/assets/email/IPGS_Official_Email_Header.jpg" alt="Innovative University College - Institute of Postgraduate Studies (IPGS)" width="580" style="display:block;width:100%;max-width:580px;height:auto;border:0"></td></tr>'
  +'<tr><td style="padding:30px 28px 12px"><div style="font-size:12px;letter-spacing:2px;color:#77518f;font-weight:bold">IPGS REGISTRY</div>'
  +'<h2 style="color:#5B2C83;font-size:22px;margin:12px 0 18px">Complete Your Admission Application</h2>'
  +'<p style="font-size:15px;line-height:1.75;margin:0 0 15px">Thank you for your interest in pursuing your studies with Innovative University College.</p>'
@@ -37,16 +34,10 @@ function remindHtml_(optoutUrl, reminderNumber){
     if(!dialog||!frame||!label)return;
     const later=Number(reminderNumber)>=7;
     label.textContent=later?'HTML Email Preview — Reminder 7 & Later':'HTML Email Preview — Reminder 1–6';
-    const logos=document.querySelectorAll('.toplogos img');
-    const iuc=logos[0]?.getAttribute('src')||'',
-      ipgs=logos[1]?.getAttribute('src')||'';
-    // Use the same two official logos already embedded in the portal UI.
-    // Link placeholders cannot unsubscribe anyone; preview is sandboxed and read-only.
+    // Render current Apps Script HTML; never substitute the old two-logo header.
+    // The iframe is sandboxed; all preview links are disabled.
     const fakeOptOut='https://example.invalid/preview-only/stop-reminders';
-    let html=remindHtml_(fakeOptOut,later?7:1)
-      .replace('cid:iucLogo',iuc)
-      .replace('cid:ipgsLogo',ipgs);
-    frame.srcdoc=html;
+    frame.srcdoc=remindHtml_(fakeOptOut,later?7:1);
     if(!dialog.open)dialog.showModal();
   };
   window.closeReminderPreview=function(){
