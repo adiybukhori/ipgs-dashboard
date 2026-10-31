@@ -201,15 +201,17 @@ function recordDaniaFollowup_(input){
   const next=event==='OPT_OUT'?'DO_NOT_CONTACT':event==='FIRST_CONTACT'?'CHECK_ACC_BEFORE_FOLLOWUP':event==='FOLLOWUP'?'CHECK_ACC_AND_OPTOUT_BEFORE_NEXT_ACTION':'REVIEW';
   const note='DANIA '+event+' '+outcome+' at '+at+'; source_ref='+ref+'; remark='+remark;
   if(index<0){
-   const val=[ic,String(p[2]||''),String(p[5]||''),String(p[7]||''),String(p[8]||''),'IPGS Briefing Registration',String(p[4]||'').replace(/[^0-9]/g,''),'UNKNOWN','PENDING_ADMISSION_FORM','UNKNOWN',state,'UNKNOWN','','',outcome==='PROVIDER_ACCEPTED'?at:'',msg,next,note];
+   const val=[ic,String(p[2]||''),String(p[5]||''),String(p[7]||''),String(p[8]||''),'IPGS Briefing Registration',String(p[4]||'').replace(/[^0-9]/g,''),'UNKNOWN','PENDING_ADMISSION_FORM',event==='OPT_OUT'?'OPTED_OUT':'UNKNOWN',state,'UNKNOWN','','',outcome==='PROVIDER_ACCEPTED'?at:'',msg,next,note];
    queue.getRange(row,1,1,18).setValues([val]);
   }else{
+   if(event==='OPT_OUT')queue.getRange(row,10).setValue('OPTED_OUT');
    queue.getRange(row,11).setValue(state);
    if(outcome==='PROVIDER_ACCEPTED')queue.getRange(row,15).setValue(at);
    if(msg)queue.getRange(row,16).setValue(msg);
    queue.getRange(row,17,1,2).setValues([[next,note]]);
   }
-  log.appendRow([at,ref,String(p[4]||'').replace(/[^0-9]/g,'').slice(-4),event,event==='FIRST_CONTACT'?'DANIA_INTRO_EMAIL_FIRST':event,'WhatsApp Business / Hermes',outcome,msg,'ACC verification recorded separately','Recorded on marketing registration','DANIA',remark]);
+  const safeRemark=/^\s*[=+@-]/.test(remark)?"'"+remark:remark;
+  log.appendRow([at,ref,String(p[4]||'').replace(/[^0-9]/g,'').slice(-4),event,event==='FIRST_CONTACT'?'DANIA_INTRO_EMAIL_FIRST':event,'WhatsApp Business / Hermes',outcome,msg,'ACC verification recorded separately','Recorded on marketing registration','DANIA',safeRemark]);
   SpreadsheetApp.flush();
   return {ok:true,sourceRef:ref,queueStatus:state};
  }finally{lock.releaseLock()}
