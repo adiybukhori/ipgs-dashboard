@@ -59,9 +59,12 @@ function build_(){
  const acc=read_(SOURCES.acc,'V2_APPLICATIONS',2,8000,{3:'Student Name',4:'ID / Passport No',5:'Personal Email',7:'Programme',10:'Intake',50:'SKY Activation Status',51:'SKY Student ID'},55);
  const tracker=read_(SOURCES.snapshot,'STUDENT_PAYMENT_TRACKER',5,10000,{0:'Student Status',2:'ID No',3:'Category',4:'Programme',5:'Intake'},6);
  const continuation=read_(SOURCES.marketing,'MARKETING_CONTINUATION_STATUS',2,500,{0:'IC / Passport',1:'Student Name',2:'Continuation Status'},7);
+ const daniaQueue=read_(SOURCES.marketing,'DANIA_WA_QUEUE',2,1000,{0:'Lead ID / Passport',1:'Name',6:'Phone (E.164)',10:'DANIA Queue Status',15:'WA Message ID',17:'Notes'},18);
  const aliasRows=read_(SOURCES.marketing,'IPGS_VERIFIED_ID_MATCHES',2,500,{0:'Marketing ID',1:'Snapshot ID',2:'Student Name',3:'Status',4:'Verification Evidence',5:'Verified By',6:'Verified Date'},7);
  const verifiedAliases=new Map(),aliasSnapshotIds=new Set();
  aliasRows.forEach(r=>{if(cell_(r,3)!=='VERIFIED')return;const marketingId=clean_(r[0]),skyId=clean_(r[1]);if(!marketingId||!skyId||marketingId===skyId||verifiedAliases.has(marketingId)||aliasSnapshotIds.has(skyId))throw Error('Invalid or duplicate verified identity match');verifiedAliases.set(marketingId,{skyId,name:cell_(r,2),evidence:cell_(r,4)});aliasSnapshotIds.add(skyId)});
+ const daniaMap=new Map();
+ daniaQueue.forEach(r=>{const id=clean_(r[0]);if(id)daniaMap.set(id,{status:cell_(r,10)||'NOT_CONTACTED',remark:cell_(r,17),lastContactAt:cell_(r,14),messageId:cell_(r,15),nextAction:cell_(r,16)});});
  const continuationMap=new Map();
  continuation.forEach(r=>{const id=clean_(r[0]);if(id)continuationMap.set(id,{status:cell_(r,2)||'Not Set',reason:cell_(r,3),effectiveDate:cell_(r,4),updatedBy:cell_(r,5),updatedAt:cell_(r,6)})});
  const applied=new Map(),active=new Map(),accEmails=new Set();
@@ -92,6 +95,7 @@ function build_(){
  snapshotId:s?skyId:'',identityMatchMethod:s?(alias?'Verified ID cross-reference':'Exact ID'):'No Active match',identityMatchNote:s&&alias?alias.evidence:'',
  accIntake:a?.intake||'',skyIntake:s?.intake||'',intakeReview:!!s&&!!a&&intake_(s.intake)!==intake_(a.intake),
  continuation:continuationMap.get(id)||{status:'Not Set',reason:'',effectiveDate:'',updatedBy:'',updatedAt:''},
+ dania:daniaMap.get(id)||{status:'NOT_CONTACTED',remark:'',lastContactAt:'',messageId:'',nextAction:''},
  categoryReview:!!s&&s.category!=='Internal'
  })});
  candidates.sort((a,b)=>(b.registeredAt||'').localeCompare(a.registeredAt||'')||a.name.localeCompare(b.name));
@@ -135,6 +139,7 @@ function doPost(e){
  const expected=PropertiesService.getScriptProperties().getProperty('BRIDGE_SHARED_SECRET');
  if(!expected||input.key!==expected)return reply_({ok:false,error:'Unauthorized'});
  if(input.action==='updateContinuation')return reply_(updateContinuation_(input));
+ if(input.action==='recordDaniaFollowup')return reply_(recordDaniaFollowup_(input));
  if(input.action==='reminderStatus')return reply_(reminderStatus_());
  if(input.action==='reminderList')return reply_(reminderList_(input));
  if(input.action==='reminderControl')return reply_(reminderControl_(input));
@@ -160,4 +165,54 @@ function updateContinuation_(input){
  const name=String(input.name||'').slice(0,160),editor=String(input.updatedBy||'Marketing Portal Staff').slice(0,120);
  sheet.getRange(row,1,1,7).setValues([[id,name,status,reason,String(input.effectiveDate||'').slice(0,10),editor,new Date().toISOString()]]);
  return {ok:true,continuation:{status,reason,effectiveDate:String(input.effectiveDate||''),updatedBy:editor}};
+}
+
+/**
+ * DANIA service-report write through the authenticated Marketing bridge.
+ * Institutional registration must exist. No WhatsApp message is sent from here.
+ */
+function recordDaniaFollowup_(input){
+ const ref=String(input.sourceRef||'').trim().toUpperCase();
+ const event=String(input.event||'').trim().toUpperCase();
+ const outcome=String(input.outcome||'').trim().toUpperCase();
+ const msg=String(input.messageId||'').trim(),remark=String(input.remark||'').trim();
+ if(!/^IPGS-[A-Z0-9-]{5,50}$/.test(ref))throw Error('Invalid marketing reference');
+ if(!['FIRST_CONTACT','FOLLOWUP','REPLY','OPT_OUT','ERROR'].includes(event))throw Error('Unsupported DANIA event');
+ if(!['PROVIDER_ACCEPTED','RECEIVED','SUPPRESSED','BLOCKED','FAILED'].includes(outcome))throw Error('Invalid DANIA outcome');
+ if(remark.length>800||msg.length>150)throw Error('Invalid remark or message ID');
+ if(outcome==='PROVIDER_ACCEPTED'&&!msg)throw Error('Provider message ID required');
+ const lock=LockService.getScriptLock();lock.waitLock(15000);
+ try{
+  const ss=SpreadsheetApp.openById(SOURCES.marketing),form=ss.getSheetByName('IPGS Briefing Registration'),queue=ss.getSheetByName('DANIA_WA_QUEUE'),log=ss.getSheetByName('DANIA_WA_LOG');
+  if(!form||!queue||!log)throw Error('DANIA sheets unavailable');
+  const registrations=form.getLastRow()>1?form.getRange(2,1,form.getLastRow()-1,9).getDisplayValues():[];
+  const matches=registrations.filter(r=>String(r[1]||'').trim().toUpperCase()===ref);
+  if(matches.length!==1)throw Error('Marketing reference missing or ambiguous');
+  const p=matches[0],ic=String(p[3]||''),normalized=clean_(ic);
+  if(!normalized)throw Error('Missing candidate identifier');
+  const previousLogs=log.getLastRow()>1?log.getRange(2,1,log.getLastRow()-1,12).getDisplayValues():[];
+  if(msg&&previousLogs.some(r=>String(r[7]||'').trim()===msg))return {ok:true,idempotent:true,sourceRef:ref};
+  const q=queue.getLastRow()>1?queue.getRange(2,1,queue.getLastRow()-1,18).getDisplayValues():[];
+  const index=q.findIndex(r=>clean_(r[0])===normalized);
+  const row=index>=0?index+2:queue.getLastRow()+1;
+  if(index>=0&&String(q[index][9]||'').toUpperCase().includes('OPT_OUT')&&event!=='OPT_OUT')throw Error('Contact opted out');
+  const state=event==='OPT_OUT'?'OPTED_OUT':event==='FIRST_CONTACT'&&outcome==='PROVIDER_ACCEPTED'?'INTRO_SENT':event==='FOLLOWUP'&&outcome==='PROVIDER_ACCEPTED'?'FOLLOWUP_SENT':event==='REPLY'?'REPLIED':outcome==='BLOCKED'?'BLOCKED':outcome==='FAILED'?'FAILED':'REVIEW';
+  const at=new Date().toISOString();
+  const next=event==='OPT_OUT'?'DO_NOT_CONTACT':event==='FIRST_CONTACT'?'CHECK_ACC_BEFORE_FOLLOWUP':event==='FOLLOWUP'?'CHECK_ACC_AND_OPTOUT_BEFORE_NEXT_ACTION':'REVIEW';
+  const note='DANIA '+event+' '+outcome+' at '+at+'; source_ref='+ref+'; remark='+remark;
+  if(index<0){
+   const val=[ic,String(p[2]||''),String(p[5]||''),String(p[7]||''),String(p[8]||''),'IPGS Briefing Registration',String(p[4]||'').replace(/[^0-9]/g,''),'UNKNOWN','PENDING_ADMISSION_FORM',event==='OPT_OUT'?'OPTED_OUT':'UNKNOWN',state,'UNKNOWN','','',outcome==='PROVIDER_ACCEPTED'?at:'',msg,next,note];
+   queue.getRange(row,1,1,18).setValues([val]);
+  }else{
+   if(event==='OPT_OUT')queue.getRange(row,10).setValue('OPTED_OUT');
+   queue.getRange(row,11).setValue(state);
+   if(outcome==='PROVIDER_ACCEPTED')queue.getRange(row,15).setValue(at);
+   if(msg)queue.getRange(row,16).setValue(msg);
+   queue.getRange(row,17,1,2).setValues([[next,note]]);
+  }
+  const safeRemark=/^\s*[=+@-]/.test(remark)?"'"+remark:remark;
+  log.appendRow([at,ref,String(p[4]||'').replace(/[^0-9]/g,'').slice(-4),event,event==='FIRST_CONTACT'?'DANIA_INTRO_EMAIL_FIRST':event,'WhatsApp Business / Hermes',outcome,msg,'ACC verification recorded separately','Recorded on marketing registration','DANIA',safeRemark]);
+  SpreadsheetApp.flush();
+  return {ok:true,sourceRef:ref,queueStatus:state};
+ }finally{lock.releaseLock()}
 }
