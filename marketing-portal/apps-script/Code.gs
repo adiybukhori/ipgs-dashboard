@@ -59,12 +59,12 @@ function build_(){
  const acc=read_(SOURCES.acc,'V2_APPLICATIONS',2,8000,{3:'Student Name',4:'ID / Passport No',5:'Personal Email',7:'Programme',10:'Intake',50:'SKY Activation Status',51:'SKY Student ID'},55);
  const tracker=read_(SOURCES.snapshot,'STUDENT_PAYMENT_TRACKER',5,10000,{0:'Student Status',2:'ID No',3:'Category',4:'Programme',5:'Intake'},6);
  const continuation=read_(SOURCES.marketing,'MARKETING_CONTINUATION_STATUS',2,500,{0:'IC / Passport',1:'Student Name',2:'Continuation Status'},7);
- const daniaQueue=read_(SOURCES.marketing,'DANIA_WA_QUEUE',2,1000,{0:'Lead ID / Passport',1:'Name',6:'Phone (E.164)',10:'DANIA Queue Status',15:'WA Message ID',17:'Notes'},18);
+ const daniaQueue=read_(SOURCES.marketing,'DANIA_WA_QUEUE',2,1000,{0:'Lead ID / Passport',1:'Name',6:'Phone (E.164)',10:'DANIA Queue Status',14:'WA Message ID',17:'Notes'},18);
  const aliasRows=read_(SOURCES.marketing,'IPGS_VERIFIED_ID_MATCHES',2,500,{0:'Marketing ID',1:'Snapshot ID',2:'Student Name',3:'Status',4:'Verification Evidence',5:'Verified By',6:'Verified Date'},7);
  const verifiedAliases=new Map(),aliasSnapshotIds=new Set();
  aliasRows.forEach(r=>{if(cell_(r,3)!=='VERIFIED')return;const marketingId=clean_(r[0]),skyId=clean_(r[1]);if(!marketingId||!skyId||marketingId===skyId||verifiedAliases.has(marketingId)||aliasSnapshotIds.has(skyId))throw Error('Invalid or duplicate verified identity match');verifiedAliases.set(marketingId,{skyId,name:cell_(r,2),evidence:cell_(r,4)});aliasSnapshotIds.add(skyId)});
  const daniaMap=new Map();
- daniaQueue.forEach(r=>{const id=clean_(r[0]);if(id)daniaMap.set(id,{status:cell_(r,10)||'NOT_CONTACTED',remark:cell_(r,17),lastContactAt:cell_(r,14),messageId:cell_(r,15),nextAction:cell_(r,16)});});
+ daniaQueue.forEach(r=>{const id=clean_(r[0]);if(id)daniaMap.set(id,{status:cell_(r,10)||'NOT_CONTACTED',remark:cell_(r,17),lastContactAt:cell_(r,13),messageId:cell_(r,14),nextAction:cell_(r,15)});});
  const continuationMap=new Map();
  continuation.forEach(r=>{const id=clean_(r[0]);if(id)continuationMap.set(id,{status:cell_(r,2)||'Not Set',reason:cell_(r,3),effectiveDate:cell_(r,4),updatedBy:cell_(r,5),updatedAt:cell_(r,6)})});
  const applied=new Map(),active=new Map(),accEmails=new Set();
@@ -195,20 +195,21 @@ function recordDaniaFollowup_(input){
   const q=queue.getLastRow()>1?queue.getRange(2,1,queue.getLastRow()-1,18).getDisplayValues():[];
   const index=q.findIndex(r=>clean_(r[0])===normalized);
   const row=index>=0?index+2:queue.getLastRow()+1;
-  if(index>=0&&String(q[index][9]||'').toUpperCase().includes('OPT_OUT')&&event!=='OPT_OUT')throw Error('Contact opted out');
+  if(index>=0&&/(?:OPTED_OUT|OPT_OUT|UNSUBSCRIBED|NOT_INTERESTED|REVOKED)/.test(String(q[index][9]||'').toUpperCase())&&event!=='OPT_OUT')throw Error('Contact opted out');
   const state=event==='OPT_OUT'?'OPTED_OUT':event==='FIRST_CONTACT'&&outcome==='PROVIDER_ACCEPTED'?'INTRO_SENT':event==='FOLLOWUP'&&outcome==='PROVIDER_ACCEPTED'?'FOLLOWUP_SENT':event==='REPLY'?'REPLIED':outcome==='BLOCKED'?'BLOCKED':outcome==='FAILED'?'FAILED':'REVIEW';
   const at=new Date().toISOString();
   const next=event==='OPT_OUT'?'DO_NOT_CONTACT':event==='FIRST_CONTACT'?'CHECK_ACC_BEFORE_FOLLOWUP':event==='FOLLOWUP'?'CHECK_ACC_AND_OPTOUT_BEFORE_NEXT_ACTION':'REVIEW';
   const note='DANIA '+event+' '+outcome+' at '+at+'; source_ref='+ref+'; remark='+remark;
   if(index<0){
-   const val=[ic,String(p[2]||''),String(p[5]||''),String(p[7]||''),String(p[8]||''),'IPGS Briefing Registration',String(p[4]||'').replace(/[^0-9]/g,''),'UNKNOWN','PENDING_ADMISSION_FORM',event==='OPT_OUT'?'OPTED_OUT':'UNKNOWN',state,'UNKNOWN','','',outcome==='PROVIDER_ACCEPTED'?at:'',msg,next,note];
+   const val=[ic,String(p[2]||''),String(p[5]||''),String(p[7]||''),String(p[8]||''),'IPGS Briefing Registration',String(p[4]||'').replace(/[^0-9]/g,''),'UNKNOWN','PENDING_ADMISSION_FORM',event==='OPT_OUT'?'OPTED_OUT':'UNKNOWN',state,'UNKNOWN','',outcome==='PROVIDER_ACCEPTED'?at:'',msg,next,at.slice(0,10),note];
    queue.getRange(row,1,1,18).setValues([val]);
   }else{
    if(event==='OPT_OUT')queue.getRange(row,10).setValue('OPTED_OUT');
    queue.getRange(row,11).setValue(state);
-   if(outcome==='PROVIDER_ACCEPTED')queue.getRange(row,15).setValue(at);
-   if(msg)queue.getRange(row,16).setValue(msg);
-   queue.getRange(row,17,1,2).setValues([[next,note]]);
+   if(outcome==='PROVIDER_ACCEPTED')queue.getRange(row,14).setValue(at);
+   if(msg)queue.getRange(row,15).setValue(msg);
+   queue.getRange(row,16).setValue(next);
+   queue.getRange(row,18).setValue(note);
   }
   const safeRemark=/^\s*[=+@-]/.test(remark)?"'"+remark:remark;
   log.appendRow([at,ref,String(p[4]||'').replace(/[^0-9]/g,'').slice(-4),event,event==='FIRST_CONTACT'?'DANIA_INTRO_EMAIL_FIRST':event,'WhatsApp Business / Hermes',outcome,msg,'ACC verification recorded separately','Recorded on marketing registration','DANIA',safeRemark]);
