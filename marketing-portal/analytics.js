@@ -26,7 +26,7 @@
   }
   function matches(candidate,f={}){
     const q=(f.search||'').trim().toLowerCase();
-    if(q&&![candidate.name,candidate.ic,candidate.email].some(x=>String(x||'').toLowerCase().includes(q)))return false;
+    if(q&&![candidate.name,candidate.ic,candidate.email,candidate.phone].some(x=>String(x||'').toLowerCase().includes(q)))return false;
     if(f.programme&&candidate.programme!==f.programme)return false;
     if(f.intake&&candidate.intake!==f.intake)return false;
     if(f.acc==='matched'&&!candidate.accFound||f.acc==='missing'&&candidate.accFound)return false;
