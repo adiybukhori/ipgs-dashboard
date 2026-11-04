@@ -54,8 +54,8 @@ function read_(id,tab,first,max,headers,width){
  return rows.slice(1);
 }
 function build_(){
- const newest=read_(SOURCES.marketing,'IPGS Briefing Registration',2,5000,{0:'Timestamp',2:'Full Name',3:'IC / Passport',5:'Email Address',7:'Programme',8:'Preferred Intake'},9);
- const historic=read_(SOURCES.marketing,'Data Briefing Session',2,5000,{0:'Timestamp',1:'Full Name (As in IC)',2:'IC Number',4:'Email Address',5:'Programme',11:'Intake'},12);
+ const newest=read_(SOURCES.marketing,'IPGS Briefing Registration',2,5000,{0:'Timestamp',2:'Full Name',3:'IC / Passport',4:'WhatsApp Number',5:'Email Address',7:'Programme',8:'Preferred Intake'},9);
+ const historic=read_(SOURCES.marketing,'Data Briefing Session',2,5000,{0:'Timestamp',1:'Full Name (As in IC)',2:'IC Number',4:'Email Address',5:'Programme',11:'Intake',12:'Phone Number'},13);
  const acc=read_(SOURCES.acc,'V2_APPLICATIONS',2,8000,{3:'Student Name',4:'ID / Passport No',5:'Personal Email',7:'Programme',10:'Intake',50:'SKY Activation Status',51:'SKY Student ID'},55);
  const tracker=read_(SOURCES.snapshot,'STUDENT_PAYMENT_TRACKER',5,10000,{0:'Student Status',2:'ID No',3:'Category',4:'Programme',5:'Intake'},6);
  const continuation=read_(SOURCES.marketing,'MARKETING_CONTINUATION_STATUS',2,500,{0:'IC / Passport',1:'Student Name',2:'Continuation Status'},7);
@@ -71,8 +71,8 @@ function build_(){
  acc.forEach(r=>{let id=clean_(r[4]);if(id)applied.set(id,{name:cell_(r,3),programme:cell_(r,7),intake:cell_(r,10),skyActivationStatus:cell_(r,50),matric:cell_(r,51)});let email=cell_(r,5).trim().toLowerCase();if(email)accEmails.add(email)});
  tracker.forEach(r=>{const id=clean_(r[2]);if(id&&/^active$/i.test(cell_(r,0)))active.set(id,{name:cell_(r,1),programme:cell_(r,4),intake:cell_(r,5),category:cell_(r,3)})});
  const leads=[];
- newest.forEach((r,i)=>{if(clean_(r[3]))leads.push({name:cell_(r,2),ic:cell_(r,3),email:cell_(r,5),programme:cell_(r,7),intake:cell_(r,8),origin:2,row:i+2,registeredAt:timestamp_(r[0]),sourceTab:'IPGS Briefing Registration'})});
- historic.forEach((r,i)=>{if(clean_(r[2]))leads.push({name:cell_(r,1),ic:cell_(r,2),email:cell_(r,4),programme:cell_(r,5),intake:cell_(r,11),origin:1,row:i+2,registeredAt:timestamp_(r[0]),sourceTab:'Data Briefing Session'})});
+ newest.forEach((r,i)=>{if(clean_(r[3]))leads.push({name:cell_(r,2),ic:cell_(r,3),phone:cell_(r,4),email:cell_(r,5),programme:cell_(r,7),intake:cell_(r,8),origin:2,row:i+2,registeredAt:timestamp_(r[0]),sourceTab:'IPGS Briefing Registration'})});
+ historic.forEach((r,i)=>{if(clean_(r[2]))leads.push({name:cell_(r,1),ic:cell_(r,2),phone:cell_(r,12),email:cell_(r,4),programme:cell_(r,5),intake:cell_(r,11),origin:1,row:i+2,registeredAt:timestamp_(r[0]),sourceTab:'Data Briefing Session'})});
  const chosen=new Map(),registrations=new Map();
  leads.forEach(l=>{const id=clean_(l.ic),p=chosen.get(id);if(!p||l.origin>p.origin||(l.origin===p.origin&&((l.registeredAt||'')>(p.registeredAt||'')||l.registeredAt===p.registeredAt&&l.row>p.row)))chosen.set(id,l);if(!registrations.has(id))registrations.set(id,[]);registrations.get(id).push(event_(l))});
  const candidates=[],previewSkyMatched=new Set();
@@ -83,7 +83,7 @@ function build_(){
   }
   if(s){if(previewSkyMatched.has(skyId))throw Error('More than one Marketing candidate mapped to same Sky ID');previewSkyMatched.add(skyId)}
   const events=registrations.get(id).sort((a,b)=>(b.registeredAt||'').localeCompare(a.registeredAt||'')),dated=events.filter(e=>e.registeredAt);candidates.push({
- id:'C'+l.origin+'R'+l.row,name:l.name||a?.name||'',ic:l.ic,email:l.email,
+ id:'C'+l.origin+'R'+l.row,name:l.name||a?.name||'',ic:l.ic,email:l.email,phone:l.phone||'',
  programme:canon_(l.programme||a?.programme||s?.programme),
  intake:intake_(l.intake||a?.intake||s?.intake),preferredIntakeOriginal:l.intake,
  stage:s?'activated':a?'applied':'interested',
